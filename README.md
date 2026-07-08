@@ -1,36 +1,118 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Mergen Watch Base
 
-## Getting Started
+Mergen Watch Base is a standalone public demo for a Base-native social
+watchlist and token research layer.
 
-First, run the development server:
+The product lets visitors browse public Base token watchlists, inspect user
+profiles, compare stance-tagged calls, read mock comments, review token-level
+social signals, and see informational watchlist performance. It is designed to
+feel like a real social research and token discovery surface, not a transaction
+farming app.
+
+## Why It Exists
+
+Base has a fast-moving token ecosystem where social context, liquidity quality,
+contract risk, and community conviction often move before polished research
+does. Mergen Watch Base explores how public watchlists could make those signals
+more legible:
+
+- Token pages show social velocity, stance distribution, comments, mock
+  liquidity, risk, and a Mergen Watch Score.
+- Watchlist pages show thesis notes, risk notes, stance badges, hit rate, best
+  call, worst call, and conviction-weighted performance.
+- Profile pages show researcher identity, followers, badges, comments, and
+  public watchlist history.
+- The dashboard gives a compact view of public Base token watchlists and recent
+  research comments.
+
+## Current Demo Status
+
+This repository is an MVP demo built with Next.js, TypeScript, Tailwind CSS,
+App Router, ESLint, and npm.
+
+Everything is local and mocked. The app does not connect to wallets, execute
+swaps, call token APIs, index live prices, submit comments, or write onchain
+state.
+
+## Routes
+
+- `/`
+- `/watch`
+- `/watch/profile/[address]`
+- `/watch/list/[id]`
+- `/watch/token/[address]`
+
+## What Is Mocked
+
+- Base tokens, addresses, prices, liquidity, holders, followers, mentions, and
+  volatility
+- User profiles, followers, reputation, and research badges
+- Watchlists, stance badges, thesis notes, risk notes, and conviction scores
+- Comments, likes, and social activity
+- Watchlist performance, hit rate, best call, worst call, and Mergen Watch Score
+
+No real API keys, private keys, seed phrases, or wallet transaction flows are
+required or included.
+
+## Performance Utilities
+
+The app includes utilities for:
+
+- Watchlist performance
+- Stance-aware hit rate
+- Best call
+- Worst call
+- Mergen Watch Score
+
+These calculations are informational and run only against the mock dataset.
+
+## Future Onchain Roadmap
+
+The intended onchain path is deliberately staged:
+
+1. Base Sepolia first for registry tests and wallet UX rehearsal.
+2. `MergenWatchRegistry` contract later for public watchlist attestations.
+3. Builder Code attribution later for downstream swap attribution.
+4. Paymaster and sponsored transactions later for low-friction watch actions.
+5. Real token price indexing later with liquidity and volatility safeguards.
+6. Comment moderation later before public write access.
+7. Future integration with the main Mergen Finance site.
+
+## Safety Notes
+
+Community signals are not financial advice. Watchlist performance is
+informational. Users should verify liquidity, contract risk, and volatility
+before trading. This demo does not execute swaps or guarantee returns.
+
+## Run Locally
 
 ```bash
+npm install
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Then open:
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```text
+http://localhost:3000
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+Validation commands:
 
-## Learn More
+```bash
+npm run lint
+npm run build
+```
 
-To learn more about Next.js, take a look at the following resources:
+On Windows PowerShell systems with script execution disabled, use:
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+```bash
+npm.cmd run lint
+npm.cmd run build
+```
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Secrets Policy
 
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Do not commit secrets. This demo should remain safe to run publicly without
+API keys, private keys, seed phrases, production credentials, or privileged
+environment variables.
