@@ -36,6 +36,9 @@ state.
 The League interface is still mock data only. It does not execute real swaps,
 wallet transactions, badge minting, or onchain writes.
 
+The current UI is simplified around a squad-builder-first experience: pick Base
+tokens, build a five-slot squad, earn weekly XP, and climb the leaderboard.
+
 The UI supports English and Turkish through a small internal dictionary and a
 visible EN / TR toggle. English is the default language because the public demo
 is aimed at the Base builder ecosystem. Turkish support is included for local

@@ -34,7 +34,6 @@ type LeagueStance = "Bullish" | "Watching" | "Risky" | "Avoid";
 type ArtTone = "blue" | "violet" | "cyan" | "green" | "gold" | "rose";
 
 const githubUrl = "https://github.com/Edizemre1/mergen-watch-base";
-const playerHandle = "@basehunter";
 const playerRank = 256;
 const maxSquadSlots = 5;
 
@@ -47,15 +46,6 @@ const tokenTones: Record<string, ArtTone> = {
   HIGHER: "rose",
   KEYCAT: "blue",
 };
-
-const leaderboard = [
-  { handle: "@defi_king", avatar: "DK", points: 15240 },
-  { handle: "@token_sorcerer", avatar: "TS", points: 9870 },
-  { handle: "@based_bruh", avatar: "BB", points: 7230 },
-  { handle: "@longbase", avatar: "LB", points: 6420 },
-  { handle: "@nft_baseset", avatar: "NB", points: 5890 },
-  { handle: playerHandle, avatar: "BH", points: 12540, active: true, rank: playerRank },
-];
 
 const avatarOptions = ["BH", "WK", "KG", "SH", "RG", "MS", "CT", "AV"];
 
@@ -112,15 +102,24 @@ function getTokenLevel(token: Token, index = 0) {
   return Math.max(8, Math.round(10 + token.watchScoreInputs.researchDepth / 12 + index));
 }
 
-function getSquadEntries() {
-  return watchlists[0].entries.slice(0, 3);
-}
+function getSquadBuilderEntries(): Array<{ token: Token; entry?: WatchlistEntry }> {
+  const preferredSymbols = ["AERO", "DEGEN", "BRETT"];
+  const allEntries = watchlists.flatMap((watchlist) => watchlist.entries);
 
-function getSquadPower() {
-  return getSquadEntries().reduce((sum, entry, index) => {
-    const token = getTokenByAddress(entry.tokenAddress);
-    return token ? sum + getTokenPoints(token, entry) + getTokenXp(token, index) : sum;
-  }, 0);
+  return preferredSymbols.flatMap((symbol) => {
+    const token = baseTokens.find((baseToken) => baseToken.symbol === symbol);
+
+    if (!token) {
+      return [];
+    }
+
+    const entry = allEntries.find(
+      (watchlistEntry) =>
+        watchlistEntry.tokenAddress.toLowerCase() === token.address.toLowerCase(),
+    );
+
+    return [{ token, entry }];
+  });
 }
 
 function gameActionForComment(comment: Comment) {
@@ -412,116 +411,146 @@ function TokenCharacterCard({
   );
 }
 
-function EmptySquadSlot() {
+function WideTokenSlot({
+  token,
+  entry,
+  index,
+}: {
+  token: Token;
+  entry?: WatchlistEntry;
+  index: number;
+}) {
+  const { t } = useLanguage();
+  const level = getTokenLevel(token, index);
+  const xp = getTokenXp(token, index);
+  const points = getTokenPoints(token, entry);
+  const performance = entry ? getEntryReturnPct(entry) : token.change7d;
+  const stance = mapStance(entry?.stance ?? (token.change7d > 0 ? "Bullish" : "Neutral"));
+  const tone = tokenTones[token.symbol] ?? "blue";
+
+  return (
+    <Link
+      href={`/watch/token/${token.address}`}
+      className="group grid overflow-hidden rounded-2xl border border-blue-300/20 bg-slate-950/80 shadow-[0_18px_46px_rgba(0,0,0,0.28)] transition hover:-translate-y-0.5 hover:border-blue-300/55 md:grid-cols-[180px_1fr]"
+    >
+      <div className={`relative min-h-36 bg-gradient-to-br ${toneGradient(tone)} p-4 md:min-h-44`}>
+        <div className="absolute left-4 top-4 rounded-lg border border-white/15 bg-black/45 px-2 py-1 text-xs font-black text-white">
+          {index + 1} / {maxSquadSlots}
+        </div>
+        <div className="absolute inset-x-6 bottom-5 h-24 rounded-[2rem] border border-white/12 bg-black/25" />
+        <div className="absolute bottom-8 left-1/2 grid size-24 -translate-x-1/2 place-items-center rounded-3xl border border-white/20 bg-black/35 text-4xl font-black text-white shadow-[0_0_28px_rgba(59,130,246,0.25)]">
+          {token.symbol.slice(0, 2)}
+        </div>
+      </div>
+      <div className="grid gap-5 p-5 lg:grid-cols-[1fr_auto] lg:items-center">
+        <div>
+          <div className="flex flex-wrap items-center gap-3">
+            <h3 className="text-3xl font-black text-white">{token.symbol}</h3>
+            <StanceBadge stance={stance} />
+          </div>
+          <p className="mt-1 text-sm text-slate-400">{token.name}</p>
+          <div className="mt-4 max-w-xl">
+            <XpBar value={xp} max={1800} />
+            <div className="mt-2 flex items-center justify-between text-xs text-slate-500">
+              <span>{t("metric.level")} {level}</span>
+              <span>{xp.toLocaleString()} / 1,800 XP</span>
+            </div>
+          </div>
+        </div>
+        <div className="grid grid-cols-3 gap-4 rounded-2xl border border-white/10 bg-black/25 p-4 text-left sm:min-w-80">
+          <MiniMetric label={t("metric.performance")} value={formatPercent(performance)} />
+          <MiniMetric label={t("metric.xp")} value={xp.toString()} />
+          <MiniMetric label={t("metric.points")} value={formatPoints(points)} />
+        </div>
+      </div>
+    </Link>
+  );
+}
+
+function WideAddSlot({ index }: { index: number }) {
   const { t } = useLanguage();
 
   return (
-    <div className="grid min-h-[316px] place-items-center rounded-2xl border border-dashed border-slate-600 bg-slate-950/58 p-5 text-center">
-      <div>
-        <div className="mx-auto grid size-20 place-items-center rounded-full border border-lime-300/35 bg-lime-300/8 text-5xl font-light text-lime-300">
+    <div className="grid min-h-36 overflow-hidden rounded-2xl border border-dashed border-lime-300/30 bg-slate-950/54 md:grid-cols-[180px_1fr]">
+      <div className="grid place-items-center bg-lime-300/6 p-5">
+        <div className="grid size-20 place-items-center rounded-full border border-lime-300/35 bg-lime-300/8 text-5xl font-light text-lime-300">
           +
         </div>
-        <div className="mt-5 text-lg font-black text-lime-300">{t("squad.add")}</div>
-        <p className="mt-2 max-w-36 text-sm leading-6 text-slate-400">{t("squad.addText")}</p>
+      </div>
+      <div className="flex flex-col justify-center p-5">
+        <div className="text-2xl font-black text-lime-300">{t("squad.add")}</div>
+        <p className="mt-2 max-w-lg text-sm leading-6 text-slate-400">{t("squad.addText")}</p>
+        <div className="mt-4 text-xs font-black uppercase tracking-wide text-blue-300">
+          {index + 1} / {maxSquadSlots} {t("squad.slots")}
+        </div>
       </div>
     </div>
   );
 }
 
-function SquadPanel({ compact = false }: { compact?: boolean }) {
+function WeeklyScoreSummary() {
   const { t } = useLanguage();
-  const entries = getSquadEntries();
-  const usedSlots = entries.length;
-
-  return (
-    <GamePanel className="p-5">
-      <PanelTitle
-        title={t("section.yourSquad")}
-        right={
-          <div className="flex items-center gap-3">
-            <div className="text-sm font-black text-blue-300">
-              {usedSlots} / {maxSquadSlots} {t("squad.slots").toUpperCase()}
-            </div>
-            <div className="rounded-xl border border-lime-300/20 bg-black/35 px-3 py-2 text-sm font-black text-lime-300">
-              {t("squad.power")} {formatPoints(getSquadPower())}
-            </div>
-          </div>
-        }
-      />
-      <p className="mt-2 text-sm text-slate-400">{t("squad.subtitle")}</p>
-      <div className={cx("mt-5 grid gap-4", compact ? "md:grid-cols-3" : "sm:grid-cols-2 xl:grid-cols-5")}>
-        {entries.map((entry, index) => {
-          const token = getTokenByAddress(entry.tokenAddress);
-          return token ? (
-            <TokenCharacterCard key={entry.tokenAddress} token={token} entry={entry} index={index} />
-          ) : null;
-        })}
-        {!compact ? (
-          <>
-            <EmptySquadSlot />
-            <EmptySquadSlot />
-          </>
-        ) : null}
-      </div>
-    </GamePanel>
+  const squad = getSquadBuilderEntries();
+  const weeklyXp = squad.reduce((sum, item, index) => sum + getTokenXp(item.token, index), 0);
+  const weeklyPoints = squad.reduce(
+    (sum, item) => sum + getTokenPoints(item.token, item.entry),
+    0,
   );
-}
-
-function WeeklySeasonPanel() {
-  const { t } = useLanguage();
 
   return (
-    <GamePanel className="p-5">
-      <PanelTitle title={t("section.weeklySeason")} />
-      <div className="mt-4 rounded-xl border border-white/10 bg-black/28 px-4 py-3">
-        <div className="flex justify-between gap-3 text-sm">
-          <span className="text-slate-300">{t("season.name")}</span>
-          <span className="font-bold text-blue-300">{t("season.ends")}</span>
+    <aside className="rounded-2xl border border-blue-300/16 bg-black/30 p-5">
+      <PanelTitle title={t("score.title")} />
+      <p className="mt-3 text-sm leading-6 text-slate-400">{t("score.summary")}</p>
+      <div className="mt-6 rounded-2xl border border-blue-300/14 bg-blue-500/10 p-5">
+        <div className="text-xs font-black uppercase tracking-wide text-slate-400">
+          {t("season.rank")}
         </div>
+        <div className="mt-2 text-5xl font-black text-white">#{playerRank}</div>
+        <div className="mt-2 font-black text-blue-300">{t("season.top")}</div>
       </div>
-      <div className="mt-5 rounded-2xl border border-blue-300/12 bg-black/24 p-5">
-        <div className="flex items-center gap-5">
-          <div className="grid size-20 place-items-center rounded-2xl border border-blue-300/30 bg-blue-500/15 text-3xl font-black text-blue-200">
-            A
-          </div>
-          <div>
-            <div className="text-xs font-black uppercase tracking-wide text-slate-400">
-              {t("season.rank")}
-            </div>
-            <div className="text-4xl font-black text-white">#{playerRank}</div>
-            <div className="font-black text-blue-300">{t("season.top")}</div>
-          </div>
+      <div className="mt-5 grid gap-4">
+        <div className="rounded-2xl border border-white/10 bg-slate-950/70 p-4">
+          <MiniMetric label={t("metric.xp")} value={formatPoints(weeklyXp)} />
         </div>
-        <div className="mt-5 flex items-center justify-between text-sm">
-          <span className="text-slate-300">{t("season.weeklyPoints")}</span>
-          <span className="font-black text-amber-200">12,540</span>
-        </div>
-        <div className="mt-2">
-          <XpBar value={12540} max={15000} />
+        <div className="rounded-2xl border border-white/10 bg-slate-950/70 p-4">
+          <MiniMetric label={t("season.weeklyPoints")} value={formatPoints(weeklyPoints)} />
         </div>
       </div>
       <div className="mt-5">
-        <div className="mb-3 text-sm font-black uppercase tracking-wide text-slate-400">
-          {t("season.rewards")}
+        <XpBar value={weeklyPoints} max={15000} />
+      </div>
+    </aside>
+  );
+}
+
+function SquadBuilderExperience() {
+  const { t } = useLanguage();
+  const squad = getSquadBuilderEntries();
+
+  return (
+    <section className="rounded-3xl border border-blue-300/16 bg-slate-950/66 p-4 shadow-[0_26px_80px_rgba(0,0,0,0.32)] md:p-6">
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <PanelTitle title={t("squad.builderTitle")} />
+          <p className="mt-3 max-w-2xl text-base leading-7 text-slate-400">
+            {t("squad.builderText")}
+          </p>
         </div>
-        <div className="grid grid-cols-3 gap-3">
-          {["10K", "15K", "20K"].map((reward, index) => (
-            <div
-              key={reward}
-              className={cx(
-                "rounded-xl border p-3 text-center",
-                index === 1 ? "border-amber-300/40 bg-amber-300/10" : "border-white/10 bg-black/24",
-              )}
-            >
-              <div className="mx-auto mb-2 grid size-10 place-items-center rounded-xl border border-white/15 bg-white/8 font-black text-white">
-                {index + 1}
-              </div>
-              <div className="text-xs font-black text-slate-300">{reward} PTS</div>
-            </div>
-          ))}
+        <div className="rounded-2xl border border-lime-300/20 bg-lime-300/8 px-4 py-3 text-sm font-black text-lime-200">
+          {squad.length} / {maxSquadSlots} {t("squad.slots").toUpperCase()}
         </div>
       </div>
-    </GamePanel>
+      <div className="mt-6 grid gap-5 xl:grid-cols-[1fr_300px]">
+        <div className="grid gap-4">
+          {squad.map(({ token, entry }, index) => (
+            <WideTokenSlot key={token.address} token={token} entry={entry} index={index} />
+          ))}
+          <WideAddSlot index={3} />
+          <WideAddSlot index={4} />
+        </div>
+        <WeeklyScoreSummary />
+      </div>
+    </section>
   );
 }
 
@@ -615,77 +644,6 @@ function BadgesPanel() {
   );
 }
 
-function LeaderboardPanel({ full = false }: { full?: boolean }) {
-  const { t } = useLanguage();
-  const rows = full ? leaderboard : leaderboard.slice(0, 6);
-
-  return (
-    <GamePanel id="leaderboard" className="p-5">
-      <PanelTitle title={t("section.leaderboard")} right={<span className="text-xs font-bold text-blue-300">{t("season.ends")}</span>} />
-      <div className="mt-4 space-y-2">
-        {rows.map((row, index) => (
-          <div
-            key={row.handle}
-            className={cx(
-              "flex items-center gap-3 rounded-xl border p-3",
-              row.active ? "border-blue-400/50 bg-blue-500/14" : "border-white/8 bg-black/24",
-            )}
-          >
-            <div className="w-8 text-center text-sm font-black text-amber-200">
-              {row.rank ?? index + 1}
-            </div>
-            <PixelAvatar label={row.avatar} tone={index % 2 === 0 ? "blue" : "violet"} size="sm" />
-            <div className="min-w-0 flex-1 truncate text-sm font-black text-white">{row.handle}</div>
-            <div className="text-sm font-black text-amber-200">{formatPoints(row.points)}</div>
-          </div>
-        ))}
-      </div>
-    </GamePanel>
-  );
-}
-
-function ActivityFeed({ limit = 4 }: { limit?: number }) {
-  const { t } = useLanguage();
-  const items = comments.slice(0, limit);
-
-  return (
-    <GamePanel className="p-5">
-      <PanelTitle title={t("section.signals")} />
-      <div className="mt-4 space-y-2">
-        {items.map((comment) => {
-          const author = getUserByAddress(comment.authorAddress);
-          const action = gameActionForComment(comment);
-          const token = action.token;
-          const targetHref = token ? `/watch/token/${token.address}` : "/watch";
-
-          return (
-            <Link
-              key={comment.id}
-              href={targetHref}
-              className="grid gap-3 rounded-xl border border-white/8 bg-black/24 p-3 transition hover:border-blue-300/25 sm:grid-cols-[auto_1fr_auto]"
-            >
-              <PixelAvatar label={author?.avatar ?? "MW"} tone="blue" size="sm" />
-              <div className="min-w-0">
-                <div className="text-sm text-slate-300">
-                  <span className="font-black text-white">@{author?.handle ?? "watcher"}</span>{" "}
-                  {t(action.key)}{" "}
-                  {token ? <span className="font-black text-white">{token.symbol}</span> : t("badge.top10")}{" "}
-                  {action.key === "signal.added" ? t("signal.toSquad") : action.key === "signal.earned" ? t("signal.badge") : t("signal.potential")}
-                </div>
-                <div className="mt-1 truncate text-xs text-slate-500">{comment.body}</div>
-              </div>
-              <div className="text-right text-sm font-black text-lime-300">
-                +{action.points}
-                <div className="text-[11px] text-slate-500">{t("metric.points")}</div>
-              </div>
-            </Link>
-          );
-        })}
-      </div>
-    </GamePanel>
-  );
-}
-
 function HowItWorksPanel() {
   const { t } = useLanguage();
   const steps: CopyKey[] = ["how.step1", "how.step2", "how.step3", "how.step4"];
@@ -708,25 +666,6 @@ function HowItWorksPanel() {
   );
 }
 
-function LobbyPreview() {
-  return (
-    <div className="grid gap-4 xl:grid-cols-[0.9fr_1.35fr_1fr]">
-      <div className="space-y-4">
-        <WeeklySeasonPanel />
-        <BadgesPanel />
-      </div>
-      <div className="space-y-4">
-        <SquadPanel />
-        <ActivityFeed />
-      </div>
-      <div className="space-y-4">
-        <ProfilePanel />
-        <LeaderboardPanel />
-      </div>
-    </div>
-  );
-}
-
 export function LandingPageView() {
   const { t } = useLanguage();
 
@@ -734,18 +673,18 @@ export function LandingPageView() {
     <div className="min-h-screen bg-[#030711] text-white">
       <TopNavigation />
       <main className="mx-auto max-w-[1600px] px-5 py-8">
-        <section className="grid gap-8 border-b border-blue-300/12 pb-8 xl:grid-cols-[0.68fr_1.32fr] xl:items-center">
-          <div>
+        <section className="border-b border-blue-300/12 pb-10">
+          <div className="mx-auto max-w-4xl text-center">
             <div className="inline-flex rounded-xl border border-lime-300/25 bg-lime-300/10 px-4 py-2 text-sm font-black text-lime-200">
               {t("demo.notice")}
             </div>
-            <h1 className="mt-7 max-w-3xl text-5xl font-black leading-[0.98] tracking-tight text-white md:text-7xl">
+            <h1 className="mt-7 text-5xl font-black leading-[0.98] tracking-tight text-white md:text-7xl">
               {t("hero.title")}
             </h1>
-            <p className="mt-6 max-w-2xl text-xl leading-9 text-slate-300">
+            <p className="mx-auto mt-6 max-w-2xl text-xl leading-9 text-slate-300">
               {t("hero.subtitle")}
             </p>
-            <div className="mt-8 flex flex-wrap gap-3">
+            <div className="mt-8 flex flex-wrap justify-center gap-3">
               <Link
                 href="/watch"
                 className="rounded-xl bg-blue-500 px-5 py-3 text-sm font-black text-white shadow-[0_0_26px_rgba(37,99,235,0.35)] transition hover:bg-blue-400"
@@ -763,12 +702,9 @@ export function LandingPageView() {
               {t("hero.command")}
             </div>
           </div>
-          <GamePanel className="p-4">
-            <PanelTitle title={t("home.visual")} />
-            <div className="mt-5">
-              <LobbyPreview />
-            </div>
-          </GamePanel>
+          <div className="mt-10">
+            <SquadBuilderExperience />
+          </div>
         </section>
 
         <section className="mt-8 grid gap-4 md:grid-cols-3">
@@ -798,24 +734,26 @@ export function WatchDashboardView() {
   const { t } = useLanguage();
 
   return (
-    <div className="space-y-5">
-      <div className="grid gap-5 xl:grid-cols-[0.82fr_2.2fr_1fr]">
-        <div className="space-y-5">
-          <WeeklySeasonPanel />
-          <BadgesPanel />
-        </div>
-        <div className="space-y-5">
-          <SquadPanel />
-          <div className="grid gap-5 lg:grid-cols-[1fr_0.8fr]">
-            <ActivityFeed limit={5} />
-            <HowItWorksPanel />
+    <div className="space-y-8">
+      <section>
+        <div className="mb-7 flex flex-wrap items-end justify-between gap-5">
+          <div>
+            <div className="inline-flex rounded-xl border border-lime-300/25 bg-lime-300/10 px-4 py-2 text-sm font-black text-lime-200">
+              {t("demo.notice")}
+            </div>
+            <h1 className="mt-5 text-5xl font-black leading-none text-white md:text-7xl">
+              {t("hero.title")}
+            </h1>
+            <p className="mt-4 max-w-2xl text-lg leading-8 text-slate-300">
+              {t("hero.subtitle")}
+            </p>
+          </div>
+          <div className="rounded-2xl border border-blue-300/20 bg-black/28 px-5 py-4 text-sm font-black uppercase tracking-[0.22em] text-blue-200">
+            {t("hero.command")}
           </div>
         </div>
-        <div className="space-y-5">
-          <ProfilePanel />
-          <LeaderboardPanel />
-        </div>
-      </div>
+        <SquadBuilderExperience />
+      </section>
       <GamePanel className="p-5">
         <PanelTitle title={t("section.watchlists")} />
         <div className="mt-5 grid gap-4 lg:grid-cols-2 xl:grid-cols-4">
