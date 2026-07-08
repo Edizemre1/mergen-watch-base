@@ -3,11 +3,11 @@
 Mergen Watch Base is a standalone public demo for a Base-native social
 watchlist and token research layer.
 
-The product lets visitors browse public Base token watchlists, inspect user
-profiles, compare stance-tagged calls, read mock comments, review token-level
-social signals, and see informational watchlist performance. It is designed to
-feel like a real social research and token discovery surface, not a transaction
-farming app.
+The product lets visitors browse public Base token watchlists, inspect market
+identity profiles, compare stance-tagged calls, read mock social signals, and
+see informational watchlist performance. The v3 redesign changes the product
+direction from a dashboard into a social watchlist network for Base token
+research.
 
 ## Why It Exists
 
@@ -16,14 +16,14 @@ contract risk, and community conviction often move before polished research
 does. Mergen Watch Base explores how public watchlists could make those signals
 more legible:
 
-- Token pages show social velocity, stance distribution, comments, mock
-  liquidity, risk, and a Mergen Watch Score.
-- Watchlist pages show thesis notes, risk notes, stance badges, hit rate, best
-  call, worst call, and conviction-weighted performance.
-- Profile pages show researcher identity, followers, badges, comments, and
-  public watchlist history.
-- The dashboard gives a compact view of public Base token watchlists and recent
-  research comments.
+- Token pages feel like social sentiment pages with community stance, top
+  watchers, related watchlists, recent signals, and safety copy.
+- Watchlist pages are shareable public lists with creator context, stance mix,
+  token rows, comments, and mock performance.
+- Profile pages show onchain-style market identities with Watch Score, hit
+  rate, best call, badges, followers, watchlists, and recent signals.
+- The Watch screen is a social product surface with featured lists, a recent
+  signal feed, and a watcher leaderboard.
 
 ## Current Demo Status
 
@@ -33,6 +33,9 @@ App Router, ESLint, and npm.
 Everything is local and mocked. The app does not connect to wallets, execute
 swaps, call token APIs, index live prices, submit comments, or write onchain
 state.
+
+The v3 interface is still mock data only. It does not execute real swaps,
+transactions, or onchain writes.
 
 The UI supports English and Turkish through a small internal dictionary and a
 visible EN / TR toggle. English is the default language because the public demo

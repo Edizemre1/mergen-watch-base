@@ -23,11 +23,12 @@ import {
   formatCompact,
   formatPercent,
   formatUsd,
+  getBestCall,
   getCallScore,
   getEntryReturnPct,
   shortAddress,
 } from "@/lib/performance";
-import type { Comment, Stance, Token, Watchlist } from "@/lib/types";
+import type { Comment, Stance, Token, UserProfile, Watchlist } from "@/lib/types";
 
 const githubUrl = "https://github.com/Edizemre1/mergen-watch-base";
 const stances: Stance[] = ["Bullish", "Neutral", "Risky", "Avoid"];
@@ -36,43 +37,46 @@ function stanceKey(stance: Stance): CopyKey {
   return `stance.${stance}` as CopyKey;
 }
 
+function toneClass(value: number) {
+  return value >= 0 ? "text-emerald-200" : "text-rose-200";
+}
+
 function dateLabel(value: string, language: "en" | "tr") {
   return new Intl.DateTimeFormat(language === "tr" ? "tr-TR" : "en-US", {
     month: "short",
     day: "numeric",
-    year: "numeric",
   }).format(new Date(value));
 }
 
-function toneClass(value: number) {
-  return value >= 0 ? "text-emerald-100" : "text-rose-100";
+function userWatchStats(user: UserProfile) {
+  const ownedLists = getWatchlistsForUser(user.address);
+  const entries = ownedLists.flatMap((watchlist) => watchlist.entries);
+  const bestEntry = getBestCall(entries);
+  const bestToken = bestEntry ? getTokenByAddress(bestEntry.tokenAddress) : null;
+
+  return {
+    ownedLists,
+    entries,
+    bestEntry,
+    bestToken,
+    hitRate: calculateHitRate(entries),
+  };
 }
 
-function SectionTitle({
-  eyebrow,
-  title,
-  children,
-}: {
-  eyebrow?: string;
-  title: string;
-  children?: React.ReactNode;
-}) {
+function dominantStance(token: Token): Stance {
+  const entries = getWatchlistsForToken(token.address).flatMap((watchlist) =>
+    watchlist.entries.filter(
+      (entry) => entry.tokenAddress.toLowerCase() === token.address.toLowerCase(),
+    ),
+  );
+
   return (
-    <div>
-      {eyebrow ? (
-        <div className="text-xs font-semibold uppercase tracking-[0.18em] text-emerald-200/70">
-          {eyebrow}
-        </div>
-      ) : null}
-      <h2 className="mt-2 text-2xl font-semibold text-white md:text-3xl">
-        {title}
-      </h2>
-      {children ? (
-        <p className="mt-3 max-w-3xl text-sm leading-7 text-white/58">
-          {children}
-        </p>
-      ) : null}
-    </div>
+    stances
+      .map((stance) => ({
+        stance,
+        count: entries.filter((entry) => entry.stance === stance).length,
+      }))
+      .sort((a, b) => b.count - a.count)[0]?.stance ?? "Neutral"
   );
 }
 
@@ -84,9 +88,21 @@ function Card({
   className?: string;
 }) {
   return (
-    <div className={`rounded-lg border border-white/10 bg-white/[0.035] ${className}`}>
+    <div className={`rounded-2xl border border-white/10 bg-white/[0.035] ${className}`}>
       {children}
     </div>
+  );
+}
+
+function Avatar({ label, size = "md" }: { label: string; size?: "sm" | "md" | "lg" }) {
+  const sizeClass = size === "lg" ? "size-16 text-xl" : size === "sm" ? "size-9 text-xs" : "size-11 text-sm";
+
+  return (
+    <span
+      className={`grid ${sizeClass} shrink-0 place-items-center rounded-full border border-sky-300/20 bg-sky-300/10 font-semibold text-sky-100`}
+    >
+      {label}
+    </span>
   );
 }
 
@@ -97,88 +113,101 @@ function Metric({
 }: {
   label: string;
   value: string;
-  tone?: "white" | "green" | "cyan" | "amber" | "rose";
+  tone?: "white" | "green" | "blue" | "amber" | "rose";
 }) {
-  const toneClasses = {
+  const tones = {
     white: "text-white",
-    green: "text-emerald-100",
-    cyan: "text-cyan-100",
-    amber: "text-amber-100",
-    rose: "text-rose-100",
+    green: "text-emerald-200",
+    blue: "text-sky-200",
+    amber: "text-amber-200",
+    rose: "text-rose-200",
   };
 
   return (
     <div>
-      <div className="text-xs uppercase tracking-[0.15em] text-white/40">
+      <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-white/38">
         {label}
       </div>
-      <div className={`mt-1 text-xl font-semibold ${toneClasses[tone]}`}>
-        {value}
-      </div>
+      <div className={`mt-1 text-xl font-semibold ${tones[tone]}`}>{value}</div>
     </div>
   );
 }
 
-function DemoBadge() {
-  const { t } = useLanguage();
-
+function SectionHeader({
+  label,
+  title,
+  children,
+}: {
+  label?: string;
+  title: string;
+  children?: React.ReactNode;
+}) {
   return (
-    <span className="inline-flex rounded-md border border-emerald-200/20 bg-emerald-200/10 px-2.5 py-1 text-xs font-semibold text-emerald-100">
-      {t("common.publicDemo")}
-    </span>
+    <div>
+      {label ? (
+        <div className="text-xs font-semibold uppercase tracking-[0.16em] text-sky-200/70">
+          {label}
+        </div>
+      ) : null}
+      <h2 className="mt-2 text-2xl font-semibold tracking-tight text-white md:text-3xl">
+        {title}
+      </h2>
+      {children ? (
+        <p className="mt-3 max-w-3xl text-sm leading-7 text-white/58">
+          {children}
+        </p>
+      ) : null}
+    </div>
   );
 }
 
-function DemoNotice() {
+function DemoNotice({ compact = false }: { compact?: boolean }) {
   const { t } = useLanguage();
 
   return (
-    <div className="rounded-lg border border-white/10 bg-white/[0.035] p-4 text-sm leading-6 text-white/62">
-      <span className="font-semibold text-white">{t("common.mockData")}:</span>{" "}
-      {t("common.demoNotice")}
+    <div
+      className={`rounded-full border border-emerald-300/18 bg-emerald-300/8 text-emerald-50/82 ${
+        compact ? "px-3 py-1.5 text-xs" : "px-4 py-2 text-sm"
+      }`}
+    >
+      {t("demo.notice")}
     </div>
   );
 }
 
 function TopNavigation() {
   const { t } = useLanguage();
-  const links = [
-    { href: "/", label: t("nav.home") },
-    { href: "/watch", label: t("nav.watch") },
-    { href: "/#roadmap", label: t("nav.roadmap") },
-  ];
 
   return (
-    <header className="sticky top-0 z-40 border-b border-white/10 bg-[#050706]/92 backdrop-blur-xl">
-      <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-4 px-5 py-4">
+    <header className="sticky top-0 z-40 border-b border-white/10 bg-[#05070c]/90 backdrop-blur-xl">
+      <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-4 px-5 py-4">
         <Link href="/" className="flex items-center gap-3">
-          <span className="grid size-9 place-items-center rounded-md border border-emerald-200/25 bg-emerald-200/10 text-sm font-bold text-emerald-100">
-            MW
+          <span className="grid size-9 place-items-center rounded-xl border border-emerald-300/25 bg-emerald-300/10 text-sm font-black text-emerald-100">
+            M
           </span>
-          <span>
-            <span className="block text-sm font-semibold text-white">
-              Mergen Watch Base
-            </span>
-            <span className="block text-xs text-white/42">
-              {t("common.publicDemo")}
-            </span>
+          <span className="text-sm font-semibold tracking-wide text-white">
+            {t("brand.short")}
           </span>
         </Link>
+
         <nav className="flex flex-wrap items-center gap-2">
-          {links.map((link) => (
-            <Link
-              key={link.href}
-              href={link.href}
-              className="rounded-md px-3 py-2 text-sm text-white/62 transition hover:bg-white/8 hover:text-white"
-            >
-              {link.label}
-            </Link>
-          ))}
+          <Link
+            href="/watch"
+            className="rounded-full px-3 py-2 text-sm text-white/62 transition hover:bg-white/8 hover:text-white"
+          >
+            {t("nav.watch")}
+          </Link>
+          <Link
+            href="/#roadmap"
+            className="rounded-full px-3 py-2 text-sm text-white/62 transition hover:bg-white/8 hover:text-white"
+          >
+            {t("nav.roadmap")}
+          </Link>
           <a
             href={githubUrl}
             target="_blank"
             rel="noreferrer"
-            className="rounded-md px-3 py-2 text-sm text-white/62 transition hover:bg-white/8 hover:text-white"
+            className="rounded-full px-3 py-2 text-sm text-white/62 transition hover:bg-white/8 hover:text-white"
           >
             {t("nav.github")}
           </a>
@@ -191,375 +220,343 @@ function TopNavigation() {
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   return (
-    <div className="min-h-screen bg-[#050706] text-white">
+    <div className="min-h-screen bg-[#05070c] text-white">
       <TopNavigation />
-      <main className="mx-auto w-full max-w-6xl px-5 py-8 md:py-10">
+      <main className="mx-auto w-full max-w-7xl px-5 py-8 md:py-10">
         {children}
       </main>
     </div>
   );
 }
 
-function PageIntro({
-  eyebrow,
-  title,
-  subtitle,
-  action,
-}: {
-  eyebrow: string;
-  title: string;
-  subtitle: string;
-  action?: React.ReactNode;
-}) {
-  return (
-    <div className="flex flex-col gap-5 border-b border-white/10 pb-7 md:flex-row md:items-end md:justify-between">
-      <SectionTitle eyebrow={eyebrow} title={title}>
-        {subtitle}
-      </SectionTitle>
-      {action ? <div className="shrink-0">{action}</div> : null}
-    </div>
-  );
-}
-
-function StanceBadge({ stance }: { stance: Stance }) {
+function StanceChip({ stance }: { stance: Stance }) {
   const { t } = useLanguage();
   const classes: Record<Stance, string> = {
     Bullish: "border-emerald-300/25 bg-emerald-300/10 text-emerald-100",
-    Neutral: "border-cyan-300/25 bg-cyan-300/10 text-cyan-100",
+    Neutral: "border-sky-300/25 bg-sky-300/10 text-sky-100",
     Risky: "border-amber-300/30 bg-amber-300/10 text-amber-100",
     Avoid: "border-rose-300/30 bg-rose-300/10 text-rose-100",
   };
 
   return (
-    <span
-      className={`inline-flex min-w-18 items-center justify-center rounded-md border px-2.5 py-1 text-xs font-semibold ${classes[stance]}`}
-    >
+    <span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold ${classes[stance]}`}>
       {t(stanceKey(stance))}
     </span>
   );
 }
 
-function ScorePill({ score }: { score: number }) {
+function TokenPill({ token, stance }: { token: Token; stance?: Stance }) {
   return (
-    <span className="rounded-md border border-cyan-200/20 bg-cyan-200/10 px-2.5 py-1 text-sm font-semibold text-cyan-100">
-      {score}
-    </span>
+    <Link
+      href={`/watch/token/${token.address}`}
+      className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-black/24 px-3 py-2 transition hover:border-sky-300/30 hover:bg-white/[0.055]"
+    >
+      <span className="text-sm font-semibold text-white">{token.symbol}</span>
+      {stance ? <StanceChip stance={stance} /> : null}
+    </Link>
   );
 }
 
-function WatchlistCard({ watchlist }: { watchlist: Watchlist }) {
+function WatchlistNetworkCard({
+  watchlist,
+  featured = false,
+}: {
+  watchlist: Watchlist;
+  featured?: boolean;
+}) {
   const { t } = useLanguage();
   const owner = getUserByAddress(watchlist.ownerAddress);
   const performance = calculateWatchlistPerformance(watchlist);
   const score = calculateWatchlistScore(watchlist, baseTokens, comments);
 
   return (
-    <Card className="p-5">
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <Link
-            href={`/watch/list/${watchlist.id}`}
-            className="text-lg font-semibold text-white transition hover:text-emerald-100"
-          >
-            {watchlist.title}
-          </Link>
-          <div className="mt-1 text-sm text-white/42">
-            {owner ? `@${owner.handle}` : t("common.notAvailable")}
+    <Card className={`p-5 ${featured ? "bg-sky-300/[0.055]" : ""}`}>
+      <div className="flex items-start gap-3">
+        <Avatar label={owner?.avatar ?? "MW"} />
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <Link
+                href={`/watch/list/${watchlist.id}`}
+                className="text-lg font-semibold text-white transition hover:text-sky-100"
+              >
+                {watchlist.title}
+              </Link>
+              <div className="mt-0.5 text-sm text-white/42">
+                {t("label.by")} @{owner?.handle ?? "unknown"}
+              </div>
+            </div>
+            <div className="rounded-full border border-sky-300/20 bg-sky-300/10 px-3 py-1 text-sm font-semibold text-sky-100">
+              {score}
+            </div>
+          </div>
+          <p className="mt-4 text-sm leading-6 text-white/58">
+            {watchlist.description}
+          </p>
+          <div className="mt-5 flex flex-wrap gap-2">
+            {watchlist.entries.slice(0, 3).map((entry) => {
+              const token = getTokenByAddress(entry.tokenAddress);
+              return token ? (
+                <TokenPill key={entry.tokenAddress} token={token} stance={entry.stance} />
+              ) : null;
+            })}
+          </div>
+          <div className="mt-5 grid grid-cols-3 gap-4">
+            <Metric
+              label={t("metric.performance")}
+              value={formatPercent(performance.weightedReturn)}
+              tone={performance.weightedReturn >= 0 ? "green" : "rose"}
+            />
+            <Metric label={t("metric.hitRate")} value={formatPercent(performance.hitRate)} tone="amber" />
+            <Metric label={t("metric.followers")} value={formatCompact(watchlist.followers)} tone="blue" />
           </div>
         </div>
-        <ScorePill score={score} />
-      </div>
-      <p className="mt-3 line-clamp-2 text-sm leading-6 text-white/58">
-        {watchlist.description}
-      </p>
-      <div className="mt-5 grid grid-cols-3 gap-4">
-        <Metric
-          label={t("common.entries")}
-          value={watchlist.entries.length.toString()}
-        />
-        <Metric
-          label={t("common.hitRate")}
-          value={formatPercent(performance.hitRate)}
-          tone="amber"
-        />
-        <Metric
-          label={t("common.return")}
-          value={formatPercent(performance.weightedReturn)}
-          tone={performance.weightedReturn >= 0 ? "green" : "rose"}
-        />
       </div>
     </Card>
   );
 }
 
-function WatcherCard({ address }: { address: string }) {
+function SignalPost({ comment }: { comment: Comment }) {
   const { language, t } = useLanguage();
-  const user = getUserByAddress(address);
-
-  if (!user) {
-    return null;
-  }
-
-  const ownedWatchlists = getWatchlistsForUser(user.address);
-  const allEntries = ownedWatchlists.flatMap((watchlist) => watchlist.entries);
+  const author = getUserByAddress(comment.authorAddress);
+  const token =
+    comment.targetType === "token" ? getTokenByAddress(comment.targetId) : null;
+  const watchlist =
+    comment.targetType === "watchlist" ? getWatchlistById(comment.targetId) : null;
+  const href = token
+    ? `/watch/token/${token.address}`
+    : watchlist
+      ? `/watch/list/${watchlist.id}`
+      : "/watch";
 
   return (
     <Card className="p-5">
-      <div className="flex items-center gap-3">
-        <div className="grid size-11 place-items-center rounded-lg border border-emerald-200/20 bg-emerald-200/10 text-sm font-semibold text-emerald-100">
-          {user.avatar}
-        </div>
-        <div>
+      <div className="flex gap-3">
+        <Avatar label={author?.avatar ?? "MW"} />
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <Link
+                href={author ? `/watch/profile/${author.address}` : "/watch"}
+                className="font-semibold text-white transition hover:text-sky-100"
+              >
+                {author?.displayName ?? "Mergen Watch"}
+              </Link>
+              <div className="text-sm text-white/40">
+                @{author?.handle ?? "network"} · {dateLabel(comment.createdAt, language)}
+              </div>
+            </div>
+            {comment.stance ? <StanceChip stance={comment.stance} /> : null}
+          </div>
+          <p className="mt-4 text-[15px] leading-7 text-white/72">{comment.body}</p>
           <Link
-            href={`/watch/profile/${user.address}`}
-            className="font-semibold text-white transition hover:text-emerald-100"
+            href={href}
+            className="mt-4 inline-flex rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5 text-xs font-semibold text-white/70 transition hover:border-emerald-300/25 hover:text-white"
           >
-            {user.displayName}
+            {token ? `${t("cta.viewToken")} ${token.symbol}` : t("cta.viewList")}
           </Link>
-          <div className="text-sm text-white/42">@{user.handle}</div>
+          <div className="mt-4 flex items-center gap-5 text-xs text-white/38">
+            <span>{comment.likes} {t("label.likes")}</span>
+            <span>12 {t("label.replies")}</span>
+          </div>
         </div>
-      </div>
-      <p className="mt-4 line-clamp-2 text-sm leading-6 text-white/58">
-        {user.bio}
-      </p>
-      <div className="mt-5 grid grid-cols-3 gap-4">
-        <Metric
-          label={t("common.followers")}
-          value={formatCompact(user.followers)}
-        />
-        <Metric label={t("common.score")} value={user.reputation.toString()} tone="cyan" />
-        <Metric
-          label={t("common.hitRate")}
-          value={formatPercent(calculateHitRate(allEntries))}
-          tone="amber"
-        />
-      </div>
-      <div className="mt-4 text-xs text-white/38">
-        {t("common.joined")} {dateLabel(user.joined, language)}
       </div>
     </Card>
   );
 }
 
-function CommentList({ items, limit = 4 }: { items: Comment[]; limit?: number }) {
-  const { language, t } = useLanguage();
-  const visibleItems = [...items]
-    .sort(
-      (a, b) =>
-        new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
-    )
-    .slice(0, limit);
-
-  if (visibleItems.length === 0) {
-    return (
-      <Card className="p-5 text-sm text-white/54">
-        {t("common.emptyComments")}
-      </Card>
-    );
-  }
+function WatcherRow({ user, rank }: { user: UserProfile; rank: number }) {
+  const { t } = useLanguage();
+  const stats = userWatchStats(user);
+  const bestLabel =
+    stats.bestToken && stats.bestEntry
+      ? `${stats.bestToken.symbol} ${formatPercent(getCallScore(stats.bestEntry))}`
+      : "-";
 
   return (
-    <div className="space-y-3">
-      {visibleItems.map((comment) => {
-        const author = getUserByAddress(comment.authorAddress);
-        return (
-          <Card key={comment.id} className="p-4">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div className="flex items-center gap-3">
-                <span className="grid size-9 place-items-center rounded-md bg-white/8 text-xs font-semibold text-white">
-                  {author?.avatar ?? "MW"}
-                </span>
+    <Link
+      href={`/watch/profile/${user.address}`}
+      className="flex items-center gap-3 rounded-2xl border border-white/10 bg-white/[0.03] p-4 transition hover:border-sky-300/25 hover:bg-white/[0.055]"
+    >
+      <span className="w-5 text-sm font-semibold text-white/38">#{rank}</span>
+      <Avatar label={user.avatar} size="sm" />
+      <div className="min-w-0 flex-1">
+        <div className="truncate text-sm font-semibold text-white">{user.displayName}</div>
+        <div className="text-xs text-white/40">@{user.handle}</div>
+      </div>
+      <div className="text-right">
+        <div className="text-sm font-semibold text-sky-100">{user.reputation}</div>
+        <div className="text-[11px] text-white/36">{t("metric.watchScore")}</div>
+      </div>
+      <div className="hidden text-right sm:block">
+        <div className="text-sm font-semibold text-emerald-100">{bestLabel}</div>
+        <div className="text-[11px] text-white/36">{t("metric.bestCall")}</div>
+      </div>
+    </Link>
+  );
+}
+
+function ProductPreview() {
+  const { t } = useLanguage();
+  const list = watchlists[0];
+  const owner = getUserByAddress(list.ownerAddress);
+  const token = baseTokens[0];
+  const watcher = users[0];
+  const score = calculateMergenWatchScore(token, getCommentsForToken(token.address));
+
+  return (
+    <div className="relative">
+      <div className="absolute inset-0 rounded-[2rem] border border-sky-300/10 bg-sky-300/6" />
+      <Card className="relative overflow-hidden rounded-[2rem] bg-[#07101a]/92 p-4 shadow-2xl shadow-black/40">
+        <div className="mb-4 flex items-center justify-between border-b border-white/10 pb-4">
+          <div>
+            <div className="text-xs uppercase tracking-[0.16em] text-sky-200/64">
+              {t("landing.preview")}
+            </div>
+            <div className="mt-1 text-lg font-semibold text-white">Base watch network</div>
+          </div>
+          <DemoNotice compact />
+        </div>
+
+        <div className="grid gap-4 lg:grid-cols-[1.05fr_0.95fr]">
+          <div className="space-y-4">
+            <div className="rounded-2xl border border-white/10 bg-black/24 p-4">
+              <div className="mb-3 text-xs font-semibold uppercase tracking-[0.16em] text-white/38">
+                {t("landing.feedTitle")}
+              </div>
+              <div className="flex gap-3">
+                <Avatar label="BS" size="sm" />
                 <div>
-                  <div className="text-sm font-semibold text-white">
-                    {author?.displayName ?? t("common.notAvailable")}
-                  </div>
-                  <div className="text-xs text-white/40">
-                    {dateLabel(comment.createdAt, language)} - {comment.likes}{" "}
-                    {t("common.likes")}
+                  <div className="text-sm font-semibold text-white">Base Signal Desk</div>
+                  <p className="mt-2 text-sm leading-6 text-white/64">
+                    {t("landing.feedBody")}
+                  </p>
+                  <div className="mt-3 flex gap-2">
+                    <StanceChip stance="Bullish" />
+                    <span className="rounded-full bg-emerald-300/10 px-2.5 py-1 text-xs font-semibold text-emerald-100">
+                      +31.5%
+                    </span>
                   </div>
                 </div>
               </div>
-              {comment.stance ? <StanceBadge stance={comment.stance} /> : null}
             </div>
-            <p className="mt-3 text-sm leading-6 text-white/62">
-              {comment.body}
-            </p>
-          </Card>
-        );
-      })}
-    </div>
-  );
-}
 
-function SafetyNote() {
-  const { t } = useLanguage();
-
-  return (
-    <Card className="border-amber-200/18 bg-amber-200/[0.055] p-5">
-      <div className="text-sm font-semibold text-amber-100">
-        {t("safety.title")}
-      </div>
-      <p className="mt-2 text-sm leading-6 text-amber-50/72">
-        {t("safety.copy")}
-      </p>
-    </Card>
-  );
-}
-
-function RoadmapSection() {
-  const { t } = useLanguage();
-  const roadmapItems: CopyKey[] = [
-    "roadmap.item1",
-    "roadmap.item2",
-    "roadmap.item3",
-    "roadmap.item4",
-    "roadmap.item5",
-    "roadmap.item6",
-    "roadmap.item7",
-  ];
-
-  return (
-    <section id="roadmap" className="space-y-5">
-      <SectionTitle eyebrow={t("roadmap.eyebrow")} title={t("roadmap.title")}>
-        {t("roadmap.subtitle")}
-      </SectionTitle>
-      <Card className="p-5">
-        <div className="grid gap-3 md:grid-cols-2">
-          {roadmapItems.map((item, index) => (
-            <div key={item} className="flex gap-3 rounded-md bg-black/18 p-3">
-              <span className="grid size-7 shrink-0 place-items-center rounded-md border border-cyan-200/20 bg-cyan-200/10 text-xs font-semibold text-cyan-100">
-                {index + 1}
-              </span>
-              <p className="text-sm leading-6 text-white/62">{t(item)}</p>
+            <div className="rounded-2xl border border-white/10 bg-black/24 p-4">
+              <div className="mb-3 text-xs font-semibold uppercase tracking-[0.16em] text-white/38">
+                {t("landing.watchlistTitle")}
+              </div>
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <div className="text-lg font-semibold text-white">{list.title}</div>
+                  <div className="mt-1 text-sm text-white/42">@{owner?.handle}</div>
+                </div>
+                <span className="rounded-full border border-sky-300/20 bg-sky-300/10 px-3 py-1 text-sm font-semibold text-sky-100">
+                  83
+                </span>
+              </div>
+              <div className="mt-4 flex flex-wrap gap-2">
+                {list.entries.slice(0, 3).map((entry) => {
+                  const entryToken = getTokenByAddress(entry.tokenAddress);
+                  return entryToken ? (
+                    <TokenPill key={entry.tokenAddress} token={entryToken} stance={entry.stance} />
+                  ) : null;
+                })}
+              </div>
             </div>
-          ))}
+          </div>
+
+          <div className="space-y-4">
+            <div className="rounded-2xl border border-white/10 bg-black/24 p-4">
+              <div className="mb-3 text-xs font-semibold uppercase tracking-[0.16em] text-white/38">
+                {t("landing.watcherTitle")}
+              </div>
+              <div className="flex items-center gap-3">
+                <Avatar label={watcher.avatar} />
+                <div className="flex-1">
+                  <div className="font-semibold text-white">{watcher.displayName}</div>
+                  <div className="text-sm text-white/42">@{watcher.handle}</div>
+                </div>
+                <Metric label={t("metric.watchScore")} value={watcher.reputation.toString()} tone="blue" />
+              </div>
+            </div>
+
+            <div className="rounded-2xl border border-white/10 bg-black/24 p-4">
+              <div className="mb-3 text-xs font-semibold uppercase tracking-[0.16em] text-white/38">
+                {t("landing.tokenTitle")}
+              </div>
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <div className="text-3xl font-semibold text-white">{token.symbol}</div>
+                  <div className="mt-1 text-sm text-white/44">{token.name}</div>
+                </div>
+                <StanceChip stance="Bullish" />
+              </div>
+              <div className="mt-5 grid grid-cols-2 gap-4">
+                <Metric label={t("metric.watchScore")} value={score.toString()} tone="blue" />
+                <Metric label="7D" value={formatPercent(token.change7d)} tone="green" />
+              </div>
+            </div>
+          </div>
         </div>
       </Card>
-    </section>
-  );
-}
-
-function SwapPreview() {
-  const { t } = useLanguage();
-
-  return (
-    <Card className="border-emerald-200/16 bg-emerald-200/[0.045] p-5">
-      <div className="text-sm font-semibold text-emerald-100">
-        {t("swap.title")}
-      </div>
-      <p className="mt-2 text-sm leading-6 text-white/62">{t("swap.copy")}</p>
-      <button
-        type="button"
-        disabled
-        className="mt-4 rounded-md border border-white/10 bg-white/7 px-4 py-2 text-sm font-semibold text-white/42"
-      >
-        {t("swap.locked")}
-      </button>
-    </Card>
+    </div>
   );
 }
 
 export function LandingPageView() {
   const { t } = useLanguage();
-  const explanationCards = [
-    {
-      title: t("landing.card1"),
-      body: t("landing.card1Text"),
-    },
-    {
-      title: t("landing.card2"),
-      body: t("landing.card2Text"),
-    },
-    {
-      title: t("landing.card3"),
-      body: t("landing.card3Text"),
-    },
-  ];
+  const pillars = [
+    ["landing.pillar1", "landing.pillar1Text"],
+    ["landing.pillar2", "landing.pillar2Text"],
+    ["landing.pillar3", "landing.pillar3Text"],
+  ] as const;
 
   return (
-    <div className="min-h-screen bg-[#050706] text-white">
+    <div className="min-h-screen bg-[#05070c] text-white">
       <TopNavigation />
-      <main className="mx-auto max-w-6xl px-5 py-12 md:py-16">
-        <section className="grid min-h-[68vh] items-center gap-10 md:grid-cols-[1.05fr_0.95fr]">
+      <main className="mx-auto max-w-7xl px-5 py-12 md:py-16">
+        <section className="grid min-h-[72vh] items-center gap-12 lg:grid-cols-[0.9fr_1.1fr]">
           <div>
-            <DemoBadge />
-            <h1 className="mt-6 text-5xl font-semibold tracking-tight text-white md:text-7xl">
+            <DemoNotice />
+            <h1 className="mt-8 max-w-3xl text-5xl font-semibold leading-[1.02] tracking-tight text-white md:text-7xl">
               {t("landing.headline")}
             </h1>
-            <p className="mt-6 max-w-2xl text-xl leading-9 text-white/66">
+            <p className="mt-6 max-w-2xl text-xl leading-9 text-white/68">
               {t("landing.subheadline")}
             </p>
-            <div className="mt-6 max-w-2xl">
-              <DemoNotice />
-            </div>
-            <div className="mt-8 flex flex-wrap gap-3">
+            <div className="mt-9 flex flex-wrap gap-3">
               <Link
                 href="/watch"
-                className="rounded-md bg-emerald-200 px-5 py-3 text-sm font-semibold text-[#07100b] transition hover:bg-emerald-100"
+                className="rounded-full bg-white px-5 py-3 text-sm font-semibold text-[#061017] transition hover:bg-emerald-100"
               >
-                {t("landing.primaryCta")}
+                {t("landing.primary")}
               </Link>
               <Link
                 href="#roadmap"
-                className="rounded-md border border-white/12 bg-white/[0.04] px-5 py-3 text-sm font-semibold text-white transition hover:bg-white/9"
+                className="rounded-full border border-white/12 bg-white/[0.04] px-5 py-3 text-sm font-semibold text-white transition hover:bg-white/10"
               >
-                {t("landing.secondaryCta")}
+                {t("landing.secondary")}
               </Link>
             </div>
           </div>
-
-          <Card className="p-5">
-            <div className="text-xs uppercase tracking-[0.18em] text-white/40">
-              {t("common.performance")}
-            </div>
-            <h2 className="mt-2 text-2xl font-semibold text-white">
-              {t("landing.snapshotTitle")}
-            </h2>
-            <p className="mt-3 text-sm leading-7 text-white/58">
-              {t("landing.snapshotText")}
-            </p>
-            <div className="mt-6 grid gap-4">
-              {explanationCards.map((card, index) => (
-                <div
-                  key={card.title}
-                  className="flex gap-4 rounded-md border border-white/8 bg-black/20 p-4"
-                >
-                  <span className="grid size-8 shrink-0 place-items-center rounded-md bg-white/8 text-sm font-semibold text-emerald-100">
-                    {index + 1}
-                  </span>
-                  <div>
-                    <div className="font-semibold text-white">{card.title}</div>
-                    <p className="mt-1 text-sm leading-6 text-white/56">
-                      {card.body}
-                    </p>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </Card>
+          <ProductPreview />
         </section>
 
-        <div className="grid gap-5 border-y border-white/10 py-8 md:grid-cols-3">
-          <Metric
-            label={t("common.watchlists")}
-            value={watchlists.length.toString()}
-            tone="cyan"
-          />
-          <Metric
-            label={t("common.watchers")}
-            value={users.length.toString()}
-            tone="green"
-          />
-          <Metric
-            label={t("common.signals")}
-            value={comments.length.toString()}
-            tone="amber"
-          />
-        </div>
+        <section className="mt-16 grid gap-5 md:grid-cols-3">
+          {pillars.map(([titleKey, textKey]) => (
+            <Card key={titleKey} className="p-6">
+              <div className="mb-5 h-1 w-12 rounded-full bg-emerald-300" />
+              <h2 className="text-xl font-semibold text-white">{t(titleKey)}</h2>
+              <p className="mt-3 text-sm leading-7 text-white/58">{t(textKey)}</p>
+            </Card>
+          ))}
+        </section>
 
-        <div className="mt-12">
-          <RoadmapSection />
-        </div>
+        <section id="roadmap" className="mt-16 border-t border-white/10 pt-10">
+          <SectionHeader title={t("landing.roadmapTitle")}>
+            {t("landing.roadmapText")}
+          </SectionHeader>
+        </section>
       </main>
     </div>
   );
@@ -567,73 +564,62 @@ export function LandingPageView() {
 
 export function WatchDashboardView() {
   const { t } = useLanguage();
-  const recentSignals = comments.slice(0, 4);
+  const topWatchers = [...users].sort((a, b) => b.reputation - a.reputation);
 
   return (
-    <div className="space-y-10">
-      <PageIntro
-        eyebrow={t("dashboard.eyebrow")}
-        title={t("dashboard.title")}
-        subtitle={t("dashboard.subtitle")}
-      />
+    <div className="space-y-8">
+      <div className="flex flex-col gap-5 border-b border-white/10 pb-8 lg:flex-row lg:items-end lg:justify-between">
+        <SectionHeader title={t("watch.title")}>{t("watch.subtitle")}</SectionHeader>
+        <DemoNotice compact />
+      </div>
 
-      <DemoNotice />
-
-      <section className="space-y-5">
-        <SectionTitle title={t("dashboard.featured")} />
-        <div className="grid gap-4 md:grid-cols-2">
-          {watchlists.map((watchlist) => (
-            <WatchlistCard key={watchlist.id} watchlist={watchlist} />
+      <div className="grid gap-6 xl:grid-cols-[0.9fr_1.25fr_0.85fr]">
+        <aside className="space-y-4">
+          <SectionHeader title={t("watch.left")} />
+          {watchlists.slice(0, 3).map((watchlist, index) => (
+            <WatchlistNetworkCard
+              key={watchlist.id}
+              watchlist={watchlist}
+              featured={index === 0}
+            />
           ))}
-        </div>
-      </section>
+        </aside>
 
-      <section className="space-y-5">
-        <SectionTitle title={t("dashboard.topWatchers")} />
-        <div className="grid gap-4 md:grid-cols-3">
-          {users.map((user) => (
-            <WatcherCard key={user.address} address={user.address} />
+        <section className="space-y-4">
+          <SectionHeader title={t("watch.center")} />
+          {comments.slice(0, 5).map((comment) => (
+            <SignalPost key={comment.id} comment={comment} />
           ))}
-        </div>
-      </section>
+        </section>
 
-      <section className="grid gap-6 lg:grid-cols-[1fr_0.78fr]">
-        <div className="space-y-5">
-          <SectionTitle title={t("dashboard.recentSignals")} />
-          <CommentList items={recentSignals} limit={4} />
-        </div>
+        <aside className="space-y-4">
+          <SectionHeader title={t("watch.right")} />
+          <Card className="p-4">
+            <div className="mb-4 text-sm font-semibold text-white">
+              {t("watch.leaderboard")}
+            </div>
+            <div className="space-y-3">
+              {topWatchers.map((user, index) => (
+                <WatcherRow key={user.address} user={user} rank={index + 1} />
+              ))}
+            </div>
+          </Card>
 
-        <div className="space-y-5">
-          <SectionTitle title={t("dashboard.howItWorks")} />
           <Card className="p-5">
-            {[
-              ["dashboard.step1Title", "dashboard.step1Text"],
-              ["dashboard.step2Title", "dashboard.step2Text"],
-              ["dashboard.step3Title", "dashboard.step3Text"],
-              ["dashboard.step4Title", "dashboard.step4Text"],
-            ].map(([titleKey, textKey], index) => (
-              <div
-                key={titleKey}
-                className="border-b border-white/8 py-4 first:pt-0 last:border-b-0 last:pb-0"
-              >
-                <div className="flex gap-3">
-                  <span className="grid size-7 shrink-0 place-items-center rounded-md bg-white/8 text-xs font-semibold text-emerald-100">
+            <div className="text-sm font-semibold text-white">{t("watch.how")}</div>
+            <div className="mt-4 space-y-3 text-sm text-white/58">
+              {[t("watch.how1"), t("watch.how2"), t("watch.how3")].map((item, index) => (
+                <div key={item} className="flex items-center gap-3">
+                  <span className="grid size-7 place-items-center rounded-full bg-white/8 text-xs font-semibold text-emerald-100">
                     {index + 1}
                   </span>
-                  <div>
-                    <div className="text-sm font-semibold text-white">
-                      {t(titleKey as CopyKey)}
-                    </div>
-                    <p className="mt-1 text-sm leading-6 text-white/56">
-                      {t(textKey as CopyKey)}
-                    </p>
-                  </div>
+                  <span>{item}</span>
                 </div>
-              </div>
-            ))}
+              ))}
+            </div>
           </Card>
-        </div>
-      </section>
+        </aside>
+      </div>
     </div>
   );
 }
@@ -646,125 +632,105 @@ export function ProfilePageView({ address }: { address: string }) {
     return null;
   }
 
-  const ownedWatchlists = getWatchlistsForUser(user.address);
-  const allEntries = ownedWatchlists.flatMap((watchlist) => watchlist.entries);
+  const stats = userWatchStats(user);
   const userComments = comments.filter(
-    (comment) =>
-      comment.authorAddress.toLowerCase() === user.address.toLowerCase(),
+    (comment) => comment.authorAddress.toLowerCase() === user.address.toLowerCase(),
   );
-  const weightedReturn =
-    ownedWatchlists.length === 0
-      ? 0
-      : ownedWatchlists.reduce(
-          (sum, watchlist) =>
-            sum + calculateWatchlistPerformance(watchlist).weightedReturn,
-          0,
-        ) / ownedWatchlists.length;
+  const bestLabel =
+    stats.bestToken && stats.bestEntry
+      ? `${stats.bestToken.symbol} ${formatPercent(getCallScore(stats.bestEntry))}`
+      : "-";
 
   return (
     <div className="space-y-8">
-      <PageIntro
-        eyebrow={t("profile.eyebrow")}
-        title={user.displayName}
-        subtitle={t("profile.subtitle")}
-        action={
-          <Link
-            href="/watch"
-            className="rounded-md border border-white/10 bg-white/[0.04] px-4 py-3 text-sm font-semibold text-white transition hover:bg-white/9"
-          >
-            {t("nav.backDashboard")}
-          </Link>
-        }
-      />
+      <Link href="/watch" className="text-sm text-white/52 transition hover:text-white">
+        {t("nav.back")}
+      </Link>
 
-      <section className="grid gap-5 lg:grid-cols-[0.8fr_1.2fr]">
-        <Card className="p-5">
-          <div className="flex items-center gap-4">
-            <div className="grid size-14 place-items-center rounded-lg border border-emerald-200/20 bg-emerald-200/10 text-lg font-semibold text-emerald-100">
-              {user.avatar}
-            </div>
+      <Card className="p-6 md:p-8">
+        <div className="flex flex-col gap-6 md:flex-row md:items-end md:justify-between">
+          <div className="flex items-start gap-5">
+            <Avatar label={user.avatar} size="lg" />
             <div>
-              <div className="text-lg font-semibold text-white">
-                @{user.handle}
+              <div className="text-xs font-semibold uppercase tracking-[0.16em] text-sky-200/70">
+                {t("profile.title")}
               </div>
-              <div className="text-sm text-white/45">{user.role}</div>
+              <h1 className="mt-2 text-4xl font-semibold tracking-tight text-white">
+                {user.displayName}
+              </h1>
+              <div className="mt-2 text-white/48">
+                @{user.handle} · {shortAddress(user.address)}
+              </div>
+              <p className="mt-5 max-w-3xl text-base leading-8 text-white/64">
+                {user.bio}
+              </p>
             </div>
           </div>
-          <p className="mt-4 text-sm leading-7 text-white/60">{user.bio}</p>
-          <div className="mt-5 space-y-2 text-sm text-white/56">
-            <div className="flex justify-between gap-4">
-              <span>{t("common.address")}</span>
-              <span className="font-mono text-xs text-white/42">
-                {shortAddress(user.address)}
-              </span>
-            </div>
-            <div className="flex justify-between gap-4">
-              <span>{t("common.joined")}</span>
-              <span>{dateLabel(user.joined, language)}</span>
-            </div>
+          <div className="grid grid-cols-2 gap-5 sm:grid-cols-4">
+            <Metric label={t("metric.watchScore")} value={user.reputation.toString()} tone="blue" />
+            <Metric label={t("profile.bestCall")} value={bestLabel} tone="green" />
+            <Metric label={t("metric.hitRate")} value={formatPercent(stats.hitRate)} tone="amber" />
+            <Metric label={t("metric.followers")} value={formatCompact(user.followers)} />
           </div>
-        </Card>
+        </div>
+        <div className="mt-6 text-sm text-white/42">
+          {t("label.joined")} {dateLabel(user.joined, language)}
+        </div>
+      </Card>
 
-        <Card className="p-5">
-          <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
-            <Metric
-              label={t("common.followers")}
-              value={formatCompact(user.followers)}
-            />
-            <Metric label={t("common.reputation")} value={user.reputation.toString()} tone="cyan" />
-            <Metric
-              label={t("common.hitRate")}
-              value={formatPercent(calculateHitRate(allEntries))}
-              tone="amber"
-            />
-            <Metric
-              label={t("common.weightedReturn")}
-              value={formatPercent(weightedReturn)}
-              tone={weightedReturn >= 0 ? "green" : "rose"}
-            />
-          </div>
-        </Card>
-      </section>
-
-      <section className="grid gap-6 lg:grid-cols-[0.78fr_1.22fr]">
-        <div className="space-y-5">
-          <SectionTitle title={t("profile.researchBadges")} />
+      <div className="grid gap-6 lg:grid-cols-[0.85fr_1.15fr]">
+        <section className="space-y-4">
+          <SectionHeader title={t("profile.publicWatchlists")} />
+          {stats.ownedLists.map((watchlist) => (
+            <WatchlistNetworkCard key={watchlist.id} watchlist={watchlist} />
+          ))}
+          <SectionHeader title={t("profile.badges")} />
           <Card className="p-5">
             <div className="space-y-3">
               {user.badges.map((badge) => (
-                <div key={badge.label} className="rounded-md bg-black/18 p-3">
-                  <div className="text-sm font-semibold text-white">
-                    {badge.label}
-                  </div>
-                  <p className="mt-1 text-sm leading-6 text-white/56">
-                    {badge.description}
-                  </p>
+                <div key={badge.label} className="rounded-2xl bg-black/24 p-4">
+                  <div className="font-semibold text-white">{badge.label}</div>
+                  <p className="mt-1 text-sm leading-6 text-white/56">{badge.description}</p>
                 </div>
               ))}
             </div>
           </Card>
-        </div>
+        </section>
 
-        <div className="space-y-5">
-          <SectionTitle title={t("profile.publicLists")} />
-          <div className="grid gap-4">
-            {ownedWatchlists.map((watchlist) => (
-              <WatchlistCard key={watchlist.id} watchlist={watchlist} />
-            ))}
+        <section className="space-y-4">
+          <SectionHeader title={t("profile.recentSignals")}>{t("profile.subtitle")}</SectionHeader>
+          {userComments.length > 0 ? (
+            userComments.map((comment) => <SignalPost key={comment.id} comment={comment} />)
+          ) : (
+            <Card className="p-5 text-white/50">{t("label.empty")}</Card>
+          )}
+        </section>
+      </div>
+    </div>
+  );
+}
+
+function StanceDistribution({ entries }: { entries: Watchlist["entries"] }) {
+  const { t } = useLanguage();
+
+  return (
+    <div className="grid gap-2 sm:grid-cols-4">
+      {stances.map((stance) => {
+        const count = entries.filter((entry) => entry.stance === stance).length;
+        return (
+          <div key={stance} className="rounded-2xl border border-white/10 bg-black/24 p-3">
+            <StanceChip stance={stance} />
+            <div className="mt-3 text-2xl font-semibold text-white">{count}</div>
+            <div className="text-xs text-white/38">{t("list.stanceMix")}</div>
           </div>
-        </div>
-      </section>
-
-      <section className="space-y-5">
-        <SectionTitle title={t("dashboard.recentSignals")} />
-        <CommentList items={userComments} />
-      </section>
+        );
+      })}
     </div>
   );
 }
 
 export function WatchlistDetailView({ id }: { id: string }) {
-  const { language, t } = useLanguage();
+  const { t } = useLanguage();
   const watchlist = getWatchlistById(id);
 
   if (!watchlist) {
@@ -775,194 +741,122 @@ export function WatchlistDetailView({ id }: { id: string }) {
   const listComments = getCommentsForWatchlist(watchlist.id);
   const performance = calculateWatchlistPerformance(watchlist);
   const score = calculateWatchlistScore(watchlist, baseTokens, comments);
-  const bestToken = performance.bestCall
-    ? getTokenByAddress(performance.bestCall.tokenAddress)
-    : undefined;
-  const worstToken = performance.worstCall
-    ? getTokenByAddress(performance.worstCall.tokenAddress)
-    : undefined;
 
   return (
     <div className="space-y-8">
-      <PageIntro
-        eyebrow={t("list.eyebrow")}
-        title={watchlist.title}
-        subtitle={t("list.subtitle")}
-        action={
-          owner ? (
-            <Link
-              href={`/watch/profile/${owner.address}`}
-              className="rounded-md border border-white/10 bg-white/[0.04] px-4 py-3 text-sm font-semibold text-white transition hover:bg-white/9"
-            >
-              {t("nav.viewProfile")}
-            </Link>
-          ) : null
-        }
-      />
+      <Link href="/watch" className="text-sm text-white/52 transition hover:text-white">
+        {t("nav.back")}
+      </Link>
 
-      <Card className="p-5">
-        <p className="max-w-4xl text-sm leading-7 text-white/62">
-          {watchlist.description}
-        </p>
-        <div className="mt-5 grid gap-5 sm:grid-cols-2 lg:grid-cols-5">
-          <Metric label={t("list.listQuality")} value={score.toString()} tone="cyan" />
-          <Metric
-            label={t("common.weightedReturn")}
-            value={formatPercent(performance.weightedReturn)}
-            tone={performance.weightedReturn >= 0 ? "green" : "rose"}
-          />
-          <Metric
-            label={t("common.hitRate")}
-            value={formatPercent(performance.hitRate)}
-            tone="amber"
-          />
-          <Metric
-            label={t("common.bestCall")}
-            value={
-              bestToken && performance.bestCall
-                ? `${bestToken.symbol} ${formatPercent(getCallScore(performance.bestCall))}`
-                : t("common.notAvailable")
-            }
-          />
-          <Metric
-            label={t("common.worstCall")}
-            value={
-              worstToken && performance.worstCall
-                ? `${worstToken.symbol} ${formatPercent(getCallScore(performance.worstCall))}`
-                : t("common.notAvailable")
-            }
-            tone="rose"
-          />
-        </div>
-        <div className="mt-5 grid gap-2 text-sm text-white/52 sm:grid-cols-3">
-          <span>
-            {t("common.owner")}: {owner ? `@${owner.handle}` : t("common.notAvailable")}
-          </span>
-          <span>
-            {t("common.updated")}: {dateLabel(watchlist.updatedAt, language)}
-          </span>
-          <span>
-            {t("common.followers")}: {formatCompact(watchlist.followers)}
-          </span>
+      <Card className="p-6 md:p-8">
+        <div className="grid gap-8 lg:grid-cols-[1fr_0.62fr]">
+          <div>
+            <div className="text-sm text-sky-200/72">{t("list.creator")}</div>
+            <Link
+              href={owner ? `/watch/profile/${owner.address}` : "/watch"}
+              className="mt-2 inline-flex items-center gap-3 text-white/72 transition hover:text-white"
+            >
+              <Avatar label={owner?.avatar ?? "MW"} size="sm" />
+              @{owner?.handle ?? "unknown"}
+            </Link>
+            <h1 className="mt-6 text-4xl font-semibold tracking-tight text-white md:text-6xl">
+              {watchlist.title}
+            </h1>
+            <p className="mt-5 max-w-3xl text-base leading-8 text-white/64">
+              {watchlist.description}
+            </p>
+          </div>
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-1">
+            <Metric label={t("metric.watchScore")} value={score.toString()} tone="blue" />
+            <Metric
+              label={t("list.totalPerformance")}
+              value={formatPercent(performance.weightedReturn)}
+              tone={performance.weightedReturn >= 0 ? "green" : "rose"}
+            />
+            <Metric label={t("metric.hitRate")} value={formatPercent(performance.hitRate)} tone="amber" />
+          </div>
         </div>
       </Card>
 
-      <section className="space-y-5">
-        <SectionTitle title={t("list.tokenCalls")} />
-        <div className="overflow-x-auto rounded-lg border border-white/10 bg-white/[0.035] thin-scrollbar">
-          <table className="min-w-[880px] w-full text-left text-sm">
-            <thead className="border-b border-white/10 text-xs uppercase tracking-[0.15em] text-white/40">
-              <tr>
-                <th className="px-4 py-3 font-medium">Token</th>
-                <th className="px-4 py-3 font-medium">Stance</th>
-                <th className="px-4 py-3 font-medium">{t("common.price")}</th>
-                <th className="px-4 py-3 font-medium">{t("common.return")}</th>
-                <th className="px-4 py-3 font-medium">{t("common.thesis")}</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-white/8">
-              {watchlist.entries.map((entry) => {
-                const token = getTokenByAddress(entry.tokenAddress);
+      <section className="space-y-4">
+        <SectionHeader title={t("list.stanceMix")} />
+        <StanceDistribution entries={watchlist.entries} />
+      </section>
 
-                if (!token) {
-                  return null;
-                }
+      <section className="space-y-4">
+        <SectionHeader title={t("list.tokens")}>{t("list.subtitle")}</SectionHeader>
+        <div className="space-y-3">
+          {watchlist.entries.map((entry) => {
+            const token = getTokenByAddress(entry.tokenAddress);
+            if (!token) {
+              return null;
+            }
+            const returnPct = getEntryReturnPct(entry);
 
-                const returnPct = getEntryReturnPct(entry);
-
-                return (
-                  <tr key={entry.tokenAddress} className="hover:bg-white/[0.025]">
-                    <td className="px-4 py-4">
+            return (
+              <Card key={entry.tokenAddress} className="p-4">
+                <div className="grid gap-4 md:grid-cols-[0.45fr_0.85fr_0.28fr] md:items-center">
+                  <div className="flex items-center gap-3">
+                    <div className="grid size-11 place-items-center rounded-full bg-white/8 text-sm font-semibold text-white">
+                      {token.symbol.slice(0, 2)}
+                    </div>
+                    <div>
                       <Link
                         href={`/watch/token/${token.address}`}
-                        className="font-semibold text-white transition hover:text-emerald-100"
+                        className="font-semibold text-white transition hover:text-sky-100"
                       >
                         {token.symbol}
                       </Link>
-                      <div className="mt-1 text-xs text-white/40">
-                        {token.name}
-                      </div>
-                    </td>
-                    <td className="px-4 py-4">
-                      <StanceBadge stance={entry.stance} />
-                    </td>
-                    <td className="px-4 py-4 text-white/62">
-                      {formatUsd(entry.currentPrice)}
-                    </td>
-                    <td className={`px-4 py-4 font-semibold ${toneClass(returnPct)}`}>
+                      <div className="text-sm text-white/42">{token.name}</div>
+                    </div>
+                  </div>
+                  <div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <StanceChip stance={entry.stance} />
+                      <span className="text-xs text-white/38">
+                        {t("metric.conviction")} {entry.conviction}
+                      </span>
+                    </div>
+                    <p className="mt-2 text-sm leading-6 text-white/60">{entry.thesis}</p>
+                  </div>
+                  <div className="text-left md:text-right">
+                    <div className={`text-lg font-semibold ${toneClass(returnPct)}`}>
                       {formatPercent(returnPct)}
-                    </td>
-                    <td className="px-4 py-4">
-                      <p className="max-w-lg leading-6 text-white/62">
-                        {entry.thesis}
-                      </p>
-                      <p className="mt-1 max-w-lg text-xs leading-5 text-amber-100/60">
-                        {entry.riskNote}
-                      </p>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+                    </div>
+                    <Link
+                      href={`/watch/token/${token.address}`}
+                      className="mt-2 inline-flex text-xs font-semibold text-sky-100 hover:text-white"
+                    >
+                      {t("cta.viewToken")}
+                    </Link>
+                  </div>
+                </div>
+              </Card>
+            );
+          })}
         </div>
       </section>
 
-      <section className="grid gap-6 lg:grid-cols-[1fr_0.75fr]">
-        <div className="space-y-5">
-          <SectionTitle title={t("list.listComments")} />
-          <CommentList items={listComments} />
+      <section className="grid gap-6 lg:grid-cols-[1fr_0.72fr]">
+        <div className="space-y-4">
+          <SectionHeader title={t("list.replies")} />
+          {listComments.map((comment) => (
+            <SignalPost key={comment.id} comment={comment} />
+          ))}
         </div>
-        <div className="space-y-5">
-          <SwapPreview />
-          <SafetyNote />
-        </div>
+        <Card className="h-fit p-5">
+          <div className="text-lg font-semibold text-white">{t("cta.futureSwap")}</div>
+          <p className="mt-3 text-sm leading-7 text-white/58">{t("cta.futureSwapText")}</p>
+          <button
+            type="button"
+            disabled
+            className="mt-5 rounded-full border border-white/10 bg-white/[0.04] px-4 py-2 text-sm font-semibold text-white/42"
+          >
+            {t("cta.futureSwap")}
+          </button>
+        </Card>
       </section>
     </div>
-  );
-}
-
-function SignalMeter({ label, value }: { label: string; value: number }) {
-  return (
-    <div>
-      <div className="flex justify-between text-xs text-white/52">
-        <span>{label}</span>
-        <span className="text-emerald-100">{value}</span>
-      </div>
-      <div className="mt-2 h-2 rounded-full bg-white/10">
-        <div
-          className="h-2 rounded-full bg-emerald-300"
-          style={{ width: `${Math.min(Math.max(value, 0), 100)}%` }}
-        />
-      </div>
-    </div>
-  );
-}
-
-function TokenMiniCard({ token }: { token: Token }) {
-  const { t } = useLanguage();
-  const tokenComments = getCommentsForToken(token.address);
-  const score = calculateMergenWatchScore(token, tokenComments);
-
-  return (
-    <Link
-      href={`/watch/token/${token.address}`}
-      className="block rounded-md border border-white/8 bg-black/18 p-3 transition hover:border-emerald-200/25 hover:bg-white/[0.045]"
-    >
-      <div className="flex items-center justify-between gap-3">
-        <div>
-          <div className="font-semibold text-white">{token.symbol}</div>
-          <div className="text-xs text-white/40">{token.name}</div>
-        </div>
-        <ScorePill score={score} />
-      </div>
-      <div className="mt-3 flex justify-between text-xs text-white/50">
-        <span>{t("common.return")}</span>
-        <span className={toneClass(token.change7d)}>
-          {formatPercent(token.change7d)}
-        </span>
-      </div>
-    </Link>
   );
 }
 
@@ -978,187 +872,97 @@ export function TokenDetailView({ address }: { address: string }) {
   const relatedWatchlists = getWatchlistsForToken(token.address);
   const relatedEntries = relatedWatchlists.flatMap((watchlist) =>
     watchlist.entries.filter(
-      (entry) =>
-        entry.tokenAddress.toLowerCase() === token.address.toLowerCase(),
+      (entry) => entry.tokenAddress.toLowerCase() === token.address.toLowerCase(),
     ),
   );
   const score = calculateMergenWatchScore(token, tokenComments);
-  const averageCallReturn =
-    relatedEntries.length === 0
-      ? 0
-      : relatedEntries.reduce((sum, entry) => sum + getEntryReturnPct(entry), 0) /
-        relatedEntries.length;
+  const communityStance = dominantStance(token);
+  const topWatchers = relatedWatchlists
+    .map((watchlist) => getUserByAddress(watchlist.ownerAddress))
+    .filter((user): user is UserProfile => Boolean(user));
 
   return (
     <div className="space-y-8">
-      <PageIntro
-        eyebrow={t("token.eyebrow")}
-        title={`${token.symbol} / ${token.name}`}
-        subtitle={t("token.subtitle")}
-        action={
-          <Link
-            href="/watch"
-            className="rounded-md border border-white/10 bg-white/[0.04] px-4 py-3 text-sm font-semibold text-white transition hover:bg-white/9"
-          >
-            {t("nav.backDashboard")}
-          </Link>
-        }
-      />
+      <Link href="/watch" className="text-sm text-white/52 transition hover:text-white">
+        {t("nav.back")}
+      </Link>
 
-      <Card className="p-5">
-        <p className="max-w-4xl text-sm leading-7 text-white/62">
-          {token.summary}
-        </p>
-        <div className="mt-5 grid gap-5 sm:grid-cols-2 lg:grid-cols-6">
-          <Metric label={t("token.socialScore")} value={score.toString()} tone="cyan" />
-          <Metric label={t("common.price")} value={formatUsd(token.price)} />
-          <Metric
-            label="24H"
-            value={formatPercent(token.change24h)}
-            tone={token.change24h >= 0 ? "green" : "rose"}
-          />
-          <Metric
-            label="7D"
-            value={formatPercent(token.change7d)}
-            tone={token.change7d >= 0 ? "green" : "rose"}
-          />
-          <Metric
-            label={t("common.liquidity")}
-            value={`$${formatCompact(token.liquidityUsd)}`}
-            tone="amber"
-          />
-          <Metric
-            label={t("token.avgCallReturn")}
-            value={formatPercent(averageCallReturn)}
-            tone={averageCallReturn >= 0 ? "green" : "rose"}
-          />
+      <Card className="p-6 md:p-8">
+        <div className="grid gap-8 lg:grid-cols-[1fr_0.75fr]">
+          <div>
+            <div className="flex flex-wrap items-center gap-3">
+              <StanceChip stance={communityStance} />
+              <span className="text-sm text-white/42">{t("token.communityStance")}</span>
+            </div>
+            <h1 className="mt-5 text-5xl font-semibold tracking-tight text-white md:text-7xl">
+              {token.symbol}
+            </h1>
+            <div className="mt-2 text-xl text-white/58">{token.name}</div>
+            <p className="mt-5 max-w-3xl text-base leading-8 text-white/64">
+              {token.summary}
+            </p>
+          </div>
+          <div className="grid grid-cols-2 gap-5">
+            <Metric label={t("metric.watchScore")} value={score.toString()} tone="blue" />
+            <Metric label={t("metric.price")} value={formatUsd(token.price)} />
+            <Metric label="7D" value={formatPercent(token.change7d)} tone={token.change7d >= 0 ? "green" : "rose"} />
+            <Metric label={t("metric.liquidity")} value={`$${formatCompact(token.liquidityUsd)}`} tone="amber" />
+            <Metric label={t("metric.mentions")} value={formatCompact(token.mentions)} />
+            <Metric label={t("metric.holders")} value={formatCompact(token.holders)} />
+          </div>
         </div>
       </Card>
 
-      <section className="grid gap-6 lg:grid-cols-[0.8fr_1.2fr]">
-        <div className="space-y-5">
-          <SectionTitle title={t("token.socialSignals")} />
-          <Card className="p-5">
-            <div className="space-y-4">
-              <SignalMeter
-                label={t("token.communityConviction")}
-                value={token.watchScoreInputs.communityConviction}
-              />
-              <SignalMeter
-                label={t("token.researchDepth")}
-                value={token.watchScoreInputs.researchDepth}
-              />
-              <SignalMeter
-                label={t("token.liquidityConfidence")}
-                value={token.watchScoreInputs.liquidityConfidence}
-              />
-              <SignalMeter
-                label={t("token.riskControl")}
-                value={token.watchScoreInputs.riskControl}
-              />
-            </div>
-            <div className="mt-5 space-y-2 text-sm text-white/56">
-              <div className="flex justify-between">
-                <span>{t("common.address")}</span>
-                <span className="font-mono text-xs text-white/40">
-                  {shortAddress(token.address)}
-                </span>
-              </div>
-              <div className="flex justify-between">
-                <span>{t("common.holders")}</span>
-                <span>{formatCompact(token.holders)}</span>
-              </div>
-              <div className="flex justify-between">
-                <span>{t("common.mentions")}</span>
-                <span>{formatCompact(token.mentions)}</span>
-              </div>
-            </div>
-          </Card>
+      <div className="grid gap-6 xl:grid-cols-[0.85fr_1.15fr_0.75fr]">
+        <aside className="space-y-4">
+          <SectionHeader title={t("token.topWatchers")} />
+          {topWatchers.map((user, index) => (
+            <WatcherRow key={user.address} user={user} rank={index + 1} />
+          ))}
 
           <Card className="p-5">
-            <div className="text-sm font-semibold text-white">
-              {t("token.stanceDistribution")}
-            </div>
-            <div className="mt-4 space-y-3">
-              {stances.map((stance) => {
-                const count = relatedEntries.filter(
-                  (entry) => entry.stance === stance,
-                ).length;
-                return (
-                  <div
-                    key={stance}
-                    className="flex items-center justify-between rounded-md bg-black/18 p-3"
-                  >
-                    <StanceBadge stance={stance} />
-                    <span className="text-sm text-white/56">{count}</span>
-                  </div>
-                );
-              })}
-            </div>
+            <div className="text-lg font-semibold text-white">{t("token.safety")}</div>
+            <p className="mt-3 text-sm leading-7 text-white/58">{t("token.safetyText")}</p>
           </Card>
-        </div>
+        </aside>
 
-        <div className="space-y-5">
-          <SectionTitle title={t("token.watchlistMentions")} />
-          <div className="grid gap-4">
-            {relatedWatchlists.map((watchlist) => {
-              const owner = getUserByAddress(watchlist.ownerAddress);
-              const entry = watchlist.entries.find(
-                (item) =>
-                  item.tokenAddress.toLowerCase() === token.address.toLowerCase(),
-              );
-              const performance = calculateWatchlistPerformance(watchlist);
+        <section className="space-y-4">
+          <SectionHeader title={t("token.recentSignals")}>{t("token.subtitle")}</SectionHeader>
+          {tokenComments.length > 0 ? (
+            tokenComments.map((comment) => <SignalPost key={comment.id} comment={comment} />)
+          ) : (
+            <Card className="p-5 text-white/50">{t("label.empty")}</Card>
+          )}
+        </section>
 
-              return (
-                <Card key={watchlist.id} className="p-4">
-                  <div className="flex flex-wrap items-center justify-between gap-3">
-                    <div>
-                      <Link
-                        href={`/watch/list/${watchlist.id}`}
-                        className="font-semibold text-white transition hover:text-emerald-100"
-                      >
-                        {watchlist.title}
-                      </Link>
-                      <div className="mt-1 text-xs text-white/40">
-                        {owner ? `@${owner.handle}` : t("common.notAvailable")}
-                      </div>
-                    </div>
-                    {entry ? <StanceBadge stance={entry.stance} /> : null}
-                  </div>
-                  <div className="mt-3 text-sm text-white/58">
-                    {t("common.weightedReturn")}{" "}
-                    <span className={toneClass(performance.weightedReturn)}>
-                      {formatPercent(performance.weightedReturn)}
-                    </span>
-                  </div>
-                </Card>
-              );
-            })}
-          </div>
-        </div>
-      </section>
+        <aside className="space-y-4">
+          <SectionHeader title={t("token.relatedLists")} />
+          {relatedWatchlists.map((watchlist) => {
+            const entry = relatedEntries.find(
+              (item) =>
+                item.tokenAddress.toLowerCase() === token.address.toLowerCase() &&
+                watchlist.entries.includes(item),
+            );
 
-      <section className="grid gap-6 lg:grid-cols-[1fr_0.75fr]">
-        <div className="space-y-5">
-          <SectionTitle title={t("common.recentComments")} />
-          <CommentList items={tokenComments} />
-        </div>
-        <div className="space-y-5">
-          <SectionTitle title={t("dashboard.featured")} />
-          <Card className="p-5">
-            <div className="grid gap-3">
-              {baseTokens
-                .filter((item) => item.address !== token.address)
-                .slice(0, 3)
-                .map((item) => (
-                  <TokenMiniCard key={item.address} token={item} />
-                ))}
-            </div>
-          </Card>
-          <SwapPreview />
-          <SafetyNote />
-        </div>
-      </section>
+            return (
+              <Card key={watchlist.id} className="p-4">
+                <Link
+                  href={`/watch/list/${watchlist.id}`}
+                  className="font-semibold text-white transition hover:text-sky-100"
+                >
+                  {watchlist.title}
+                </Link>
+                <div className="mt-3 flex flex-wrap items-center gap-2">
+                  {entry ? <StanceChip stance={entry.stance} /> : null}
+                  <span className="text-xs text-white/42">
+                    {formatCompact(watchlist.followers)} {t("metric.followers")}
+                  </span>
+                </div>
+              </Card>
+            );
+          })}
+        </aside>
+      </div>
     </div>
   );
 }
