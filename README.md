@@ -34,6 +34,11 @@ Everything is local and mocked. The app does not connect to wallets, execute
 swaps, call token APIs, index live prices, submit comments, or write onchain
 state.
 
+The UI supports English and Turkish through a small internal dictionary and a
+visible EN / TR toggle. English is the default language because the public demo
+is aimed at the Base builder ecosystem. Turkish support is included for local
+product review and stakeholder feedback.
+
 ## Routes
 
 - `/`

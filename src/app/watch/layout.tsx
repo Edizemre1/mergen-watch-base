@@ -1,9 +1,9 @@
-import { WatchAppShell } from "@/components/watch-ui";
+import { AppShell } from "@/components/mergen-watch-app";
 
 export default function WatchLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  return <WatchAppShell>{children}</WatchAppShell>;
+  return <AppShell>{children}</AppShell>;
 }
