@@ -1,29 +1,28 @@
 # Mergen Watch Base
 
-Mergen Watch Base is a standalone public demo for a Base-native social
-watchlist and token research layer.
+Mergen Watch Base is a standalone public demo for a Base-native weekly squad
+game called Mergen Watch League.
 
-The product lets visitors browse public Base token watchlists, inspect market
-identity profiles, compare stance-tagged calls, read mock social signals, and
-see informational watchlist performance. The v3 redesign changes the product
-direction from a dashboard into a social watchlist network for Base token
-research.
+The product lets visitors build a weekly Base token squad, inspect collectible
+token character cards, follow mock performance scoring, earn XP and badges, and
+climb a weekly leaderboard. It still keeps the social watchlist DNA, but the v4
+direction is a browser-game-style product lobby rather than a crypto dashboard.
 
 ## Why It Exists
 
 Base has a fast-moving token ecosystem where social context, liquidity quality,
 contract risk, and community conviction often move before polished research
-does. Mergen Watch Base explores how public watchlists could make those signals
-more legible:
+does. Mergen Watch League explores how watchlist performance could become a
+simple game loop:
 
-- Token pages feel like social sentiment pages with community stance, top
-  watchers, related watchlists, recent signals, and safety copy.
-- Watchlist pages are shareable public lists with creator context, stance mix,
-  token rows, comments, and mock performance.
-- Profile pages show onchain-style market identities with Watch Score, hit
-  rate, best call, badges, followers, watchlists, and recent signals.
-- The Watch screen is a social product surface with featured lists, a recent
-  signal feed, and a watcher leaderboard.
+- Pick 3 to 5 Base tokens for a weekly squad.
+- Each token appears as a character-style card with stance, XP, points, level,
+  and weekly performance.
+- Watchlist performance powers mock weekly scoring.
+- Players earn badges such as Win Streak, Early Watcher, Token Scout, Squad
+  Builder, High Roller, and Veteran.
+- Profiles preview future wallet identities, XP history, and market reputation.
+- Future versions could mint onchain badges and season achievements.
 
 ## Current Demo Status
 
@@ -34,8 +33,8 @@ Everything is local and mocked. The app does not connect to wallets, execute
 swaps, call token APIs, index live prices, submit comments, or write onchain
 state.
 
-The v3 interface is still mock data only. It does not execute real swaps,
-transactions, or onchain writes.
+The League interface is still mock data only. It does not execute real swaps,
+wallet transactions, badge minting, or onchain writes.
 
 The UI supports English and Turkish through a small internal dictionary and a
 visible EN / TR toggle. English is the default language because the public demo
@@ -55,8 +54,9 @@ product review and stakeholder feedback.
 - Base tokens, addresses, prices, liquidity, holders, followers, mentions, and
   volatility
 - User profiles, followers, reputation, and research badges
-- Watchlists, stance badges, thesis notes, risk notes, and conviction scores
-- Comments, likes, and social activity
+- Weekly squads, token character cards, stance badges, XP, points, and levels
+- Watchlists, thesis notes, risk notes, and conviction scores
+- Activity feed events, likes, badges, and leaderboard ranks
 - Watchlist performance, hit rate, best call, worst call, and Mergen Watch Score
 
 No real API keys, private keys, seed phrases, or wallet transaction flows are

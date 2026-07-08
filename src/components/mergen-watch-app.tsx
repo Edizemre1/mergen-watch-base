@@ -28,24 +28,114 @@ import {
   getEntryReturnPct,
   shortAddress,
 } from "@/lib/performance";
-import type { Comment, Stance, Token, UserProfile, Watchlist } from "@/lib/types";
+import type { Comment, Stance, Token, UserProfile, Watchlist, WatchlistEntry } from "@/lib/types";
+
+type LeagueStance = "Bullish" | "Watching" | "Risky" | "Avoid";
+type ArtTone = "blue" | "violet" | "cyan" | "green" | "gold" | "rose";
 
 const githubUrl = "https://github.com/Edizemre1/mergen-watch-base";
-const stances: Stance[] = ["Bullish", "Neutral", "Risky", "Avoid"];
+const playerHandle = "@basehunter";
+const playerRank = 256;
+const maxSquadSlots = 5;
 
-function stanceKey(stance: Stance): CopyKey {
+const tokenTones: Record<string, ArtTone> = {
+  AERO: "blue",
+  BRETT: "cyan",
+  TOSHI: "green",
+  DEGEN: "violet",
+  VIRTUAL: "gold",
+  HIGHER: "rose",
+  KEYCAT: "blue",
+};
+
+const leaderboard = [
+  { handle: "@defi_king", avatar: "DK", points: 15240 },
+  { handle: "@token_sorcerer", avatar: "TS", points: 9870 },
+  { handle: "@based_bruh", avatar: "BB", points: 7230 },
+  { handle: "@longbase", avatar: "LB", points: 6420 },
+  { handle: "@nft_baseset", avatar: "NB", points: 5890 },
+  { handle: playerHandle, avatar: "BH", points: 12540, active: true, rank: playerRank },
+];
+
+const avatarOptions = ["BH", "WK", "KG", "SH", "RG", "MS", "CT", "AV"];
+
+const badgeKeys = [
+  ["badge.winStreak", "badge.winStreakMeta", "green"],
+  ["badge.top10", "badge.top10Meta", "blue"],
+  ["badge.earlyWatcher", "badge.earlyWatcherMeta", "gold"],
+  ["badge.baseResearcher", "badge.baseResearcherMeta", "violet"],
+  ["badge.tokenScout", "badge.tokenScoutMeta", "green"],
+  ["badge.squadBuilder", "badge.squadBuilderMeta", "blue"],
+  ["badge.highRoller", "badge.highRollerMeta", "gold"],
+  ["badge.veteran", "badge.veteranMeta", "violet"],
+] as const;
+
+function mapStance(stance: Stance): LeagueStance {
+  return stance === "Neutral" ? "Watching" : stance;
+}
+
+function stanceKey(stance: LeagueStance): CopyKey {
   return `stance.${stance}` as CopyKey;
 }
 
-function toneClass(value: number) {
-  return value >= 0 ? "text-emerald-200" : "text-rose-200";
+function cx(...classes: Array<string | false | null | undefined>) {
+  return classes.filter(Boolean).join(" ");
 }
 
-function dateLabel(value: string, language: "en" | "tr") {
-  return new Intl.DateTimeFormat(language === "tr" ? "tr-TR" : "en-US", {
-    month: "short",
-    day: "numeric",
-  }).format(new Date(value));
+function toneGradient(tone: ArtTone) {
+  const gradients: Record<ArtTone, string> = {
+    blue: "from-blue-500/30 via-sky-400/20 to-slate-950",
+    violet: "from-violet-500/35 via-fuchsia-400/20 to-slate-950",
+    cyan: "from-cyan-400/35 via-blue-400/20 to-slate-950",
+    green: "from-emerald-400/30 via-lime-300/16 to-slate-950",
+    gold: "from-amber-300/35 via-orange-400/20 to-slate-950",
+    rose: "from-rose-400/32 via-orange-300/18 to-slate-950",
+  };
+
+  return gradients[tone];
+}
+
+function formatPoints(value: number) {
+  return value.toLocaleString("en-US");
+}
+
+function getTokenXp(token: Token, index = 0) {
+  return Math.max(180, Math.round(token.socialVelocity * 4 + Math.abs(token.change7d) * 18 + index * 45));
+}
+
+function getTokenPoints(token: Token, entry?: WatchlistEntry) {
+  const returnScore = entry ? Math.max(0, getEntryReturnPct(entry) * 58) : Math.max(0, token.change7d * 52);
+  return Math.round(900 + token.socialVelocity * 8 + returnScore);
+}
+
+function getTokenLevel(token: Token, index = 0) {
+  return Math.max(8, Math.round(10 + token.watchScoreInputs.researchDepth / 12 + index));
+}
+
+function getSquadEntries() {
+  return watchlists[0].entries.slice(0, 3);
+}
+
+function getSquadPower() {
+  return getSquadEntries().reduce((sum, entry, index) => {
+    const token = getTokenByAddress(entry.tokenAddress);
+    return token ? sum + getTokenPoints(token, entry) + getTokenXp(token, index) : sum;
+  }, 0);
+}
+
+function gameActionForComment(comment: Comment) {
+  if (comment.targetType === "token") {
+    const token = getTokenByAddress(comment.targetId);
+    if (comment.stance === "Bullish") {
+      return { key: "signal.upgraded" as CopyKey, token, points: 320 };
+    }
+    if (comment.stance === "Risky") {
+      return { key: "signal.discovered" as CopyKey, token, points: 120 };
+    }
+    return { key: "signal.added" as CopyKey, token, points: 210 };
+  }
+
+  return { key: "signal.earned" as CopyKey, token: null, points: 500 };
 }
 
 function userWatchStats(user: UserProfile) {
@@ -63,115 +153,125 @@ function userWatchStats(user: UserProfile) {
   };
 }
 
-function dominantStance(token: Token): Stance {
-  const entries = getWatchlistsForToken(token.address).flatMap((watchlist) =>
+function dominantTokenStance(token: Token): LeagueStance {
+  const relatedEntries = getWatchlistsForToken(token.address).flatMap((watchlist) =>
     watchlist.entries.filter(
       (entry) => entry.tokenAddress.toLowerCase() === token.address.toLowerCase(),
     ),
   );
 
-  return (
-    stances
-      .map((stance) => ({
-        stance,
-        count: entries.filter((entry) => entry.stance === stance).length,
-      }))
-      .sort((a, b) => b.count - a.count)[0]?.stance ?? "Neutral"
-  );
+  const top = (["Bullish", "Neutral", "Risky", "Avoid"] as Stance[])
+    .map((stance) => ({
+      stance,
+      count: relatedEntries.filter((entry) => entry.stance === stance).length,
+    }))
+    .sort((a, b) => b.count - a.count)[0]?.stance;
+
+  return mapStance(top ?? "Neutral");
 }
 
-function Card({
+function GamePanel({
   children,
   className = "",
+  id,
 }: {
   children: React.ReactNode;
   className?: string;
+  id?: string;
 }) {
   return (
-    <div className={`rounded-2xl border border-white/10 bg-white/[0.035] ${className}`}>
+    <section
+      id={id}
+      className={`rounded-2xl border border-blue-300/15 bg-slate-950/72 shadow-[0_0_0_1px_rgba(15,23,42,0.8),0_24px_70px_rgba(0,0,0,0.35)] ${className}`}
+    >
       {children}
+    </section>
+  );
+}
+
+function PanelTitle({
+  title,
+  right,
+}: {
+  title: string;
+  right?: React.ReactNode;
+}) {
+  return (
+    <div className="flex items-center justify-between gap-3">
+      <div className="flex items-center gap-2">
+        <span className="grid size-7 place-items-center rounded-lg border border-blue-400/30 bg-blue-500/12 text-xs font-black text-blue-200">
+          W
+        </span>
+        <h2 className="text-lg font-black uppercase tracking-wide text-white">{title}</h2>
+      </div>
+      {right}
     </div>
   );
 }
 
-function Avatar({ label, size = "md" }: { label: string; size?: "sm" | "md" | "lg" }) {
-  const sizeClass = size === "lg" ? "size-16 text-xl" : size === "sm" ? "size-9 text-xs" : "size-11 text-sm";
+function XpBar({ value, max = 2000 }: { value: number; max?: number }) {
+  const width = Math.max(7, Math.min(100, (value / max) * 100));
 
   return (
-    <span
-      className={`grid ${sizeClass} shrink-0 place-items-center rounded-full border border-sky-300/20 bg-sky-300/10 font-semibold text-sky-100`}
-    >
-      {label}
-    </span>
+    <div className="h-2 rounded-full bg-black/45">
+      <div
+        className="h-2 rounded-full bg-gradient-to-r from-blue-500 to-lime-300"
+        style={{ width: `${width}%` }}
+      />
+    </div>
   );
 }
 
-function Metric({
+function PixelAvatar({
   label,
-  value,
-  tone = "white",
+  tone = "green",
+  selected = false,
+  size = "md",
 }: {
   label: string;
-  value: string;
-  tone?: "white" | "green" | "blue" | "amber" | "rose";
+  tone?: ArtTone;
+  selected?: boolean;
+  size?: "sm" | "md" | "lg";
 }) {
-  const tones = {
-    white: "text-white",
-    green: "text-emerald-200",
-    blue: "text-sky-200",
-    amber: "text-amber-200",
-    rose: "text-rose-200",
-  };
-
-  return (
-    <div>
-      <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-white/38">
-        {label}
-      </div>
-      <div className={`mt-1 text-xl font-semibold ${tones[tone]}`}>{value}</div>
-    </div>
-  );
-}
-
-function SectionHeader({
-  label,
-  title,
-  children,
-}: {
-  label?: string;
-  title: string;
-  children?: React.ReactNode;
-}) {
-  return (
-    <div>
-      {label ? (
-        <div className="text-xs font-semibold uppercase tracking-[0.16em] text-sky-200/70">
-          {label}
-        </div>
-      ) : null}
-      <h2 className="mt-2 text-2xl font-semibold tracking-tight text-white md:text-3xl">
-        {title}
-      </h2>
-      {children ? (
-        <p className="mt-3 max-w-3xl text-sm leading-7 text-white/58">
-          {children}
-        </p>
-      ) : null}
-    </div>
-  );
-}
-
-function DemoNotice({ compact = false }: { compact?: boolean }) {
-  const { t } = useLanguage();
+  const sizeClass = size === "lg" ? "size-24" : size === "sm" ? "size-10" : "size-16";
+  const innerSizeClass = size === "lg" ? "size-14 text-lg" : size === "sm" ? "size-7 text-[10px]" : "size-10 text-sm";
 
   return (
     <div
-      className={`rounded-full border border-emerald-300/18 bg-emerald-300/8 text-emerald-50/82 ${
-        compact ? "px-3 py-1.5 text-xs" : "px-4 py-2 text-sm"
-      }`}
+      className={cx(
+        "relative grid shrink-0 place-items-center overflow-hidden rounded-xl border bg-gradient-to-br",
+        sizeClass,
+        toneGradient(tone),
+        selected ? "border-lime-300 shadow-[0_0_20px_rgba(163,230,53,0.35)]" : "border-white/12",
+      )}
     >
-      {t("demo.notice")}
+      <div className="absolute left-2 top-2 size-3 rounded-sm bg-white/70" />
+      <div className="absolute right-3 top-4 size-2 rounded-sm bg-lime-300/80" />
+      <div className="absolute bottom-3 h-5 w-10 rounded-t-xl bg-black/35" />
+      <div className={`relative grid place-items-center rounded-lg border border-white/15 bg-black/34 font-black text-white ${innerSizeClass}`}>
+        {label}
+      </div>
     </div>
+  );
+}
+
+function LeagueLogo() {
+  return (
+    <Link href="/" className="flex items-center gap-3">
+      <div className="grid size-11 place-items-center rounded-xl border border-blue-400/35 bg-blue-500/12 shadow-[0_0_26px_rgba(37,99,235,0.25)]">
+        <div className="grid size-7 place-items-center rounded-lg border border-lime-300/40 bg-lime-300/10 text-sm font-black text-lime-200">
+          M
+        </div>
+      </div>
+      <div>
+        <div className="text-xl font-black uppercase leading-none tracking-wide text-white">
+          Mergen
+        </div>
+        <div className="text-xs font-black uppercase tracking-[0.25em] text-blue-400">
+          Watch League
+        </div>
+      </div>
+    </Link>
   );
 }
 
@@ -179,38 +279,36 @@ function TopNavigation() {
   const { t } = useLanguage();
 
   return (
-    <header className="sticky top-0 z-40 border-b border-white/10 bg-[#05070c]/90 backdrop-blur-xl">
-      <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-4 px-5 py-4">
-        <Link href="/" className="flex items-center gap-3">
-          <span className="grid size-9 place-items-center rounded-xl border border-emerald-300/25 bg-emerald-300/10 text-sm font-black text-emerald-100">
-            M
-          </span>
-          <span className="text-sm font-semibold tracking-wide text-white">
-            {t("brand.short")}
-          </span>
-        </Link>
-
+    <header className="sticky top-0 z-40 border-b border-blue-300/12 bg-[#030711]/94 backdrop-blur-xl">
+      <div className="mx-auto flex max-w-[1600px] flex-wrap items-center justify-between gap-4 px-5 py-4">
+        <LeagueLogo />
         <nav className="flex flex-wrap items-center gap-2">
-          <Link
-            href="/watch"
-            className="rounded-full px-3 py-2 text-sm text-white/62 transition hover:bg-white/8 hover:text-white"
-          >
-            {t("nav.watch")}
-          </Link>
-          <Link
-            href="/#roadmap"
-            className="rounded-full px-3 py-2 text-sm text-white/62 transition hover:bg-white/8 hover:text-white"
-          >
-            {t("nav.roadmap")}
-          </Link>
+          {[
+            ["/", "nav.lobby"],
+            ["/watch", "nav.squad"],
+            ["/watch#leaderboard", "nav.leaderboard"],
+            ["/watch#badges", "nav.badges"],
+            ["/#roadmap", "nav.roadmap"],
+          ].map(([href, key]) => (
+            <Link
+              key={href}
+              href={href}
+              className="rounded-xl px-3 py-2 text-sm font-bold text-slate-400 transition hover:bg-blue-500/10 hover:text-white"
+            >
+              {t(key as CopyKey)}
+            </Link>
+          ))}
           <a
             href={githubUrl}
             target="_blank"
             rel="noreferrer"
-            className="rounded-full px-3 py-2 text-sm text-white/62 transition hover:bg-white/8 hover:text-white"
+            className="rounded-xl px-3 py-2 text-sm font-bold text-slate-400 transition hover:bg-blue-500/10 hover:text-white"
           >
             {t("nav.github")}
           </a>
+          <div className="hidden rounded-xl border border-lime-300/20 bg-black/35 px-4 py-2 text-sm font-black text-lime-200 md:block">
+            1,250 XP
+          </div>
           <LanguageToggle />
         </nav>
       </div>
@@ -220,343 +318,477 @@ function TopNavigation() {
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   return (
-    <div className="min-h-screen bg-[#05070c] text-white">
+    <div className="min-h-screen bg-[#030711] text-white">
       <TopNavigation />
-      <main className="mx-auto w-full max-w-7xl px-5 py-8 md:py-10">
-        {children}
-      </main>
+      <main className="mx-auto w-full max-w-[1600px] px-5 py-6">{children}</main>
     </div>
   );
 }
 
-function StanceChip({ stance }: { stance: Stance }) {
+function StanceBadge({ stance }: { stance: LeagueStance }) {
   const { t } = useLanguage();
-  const classes: Record<Stance, string> = {
-    Bullish: "border-emerald-300/25 bg-emerald-300/10 text-emerald-100",
-    Neutral: "border-sky-300/25 bg-sky-300/10 text-sky-100",
-    Risky: "border-amber-300/30 bg-amber-300/10 text-amber-100",
-    Avoid: "border-rose-300/30 bg-rose-300/10 text-rose-100",
+  const classes: Record<LeagueStance, string> = {
+    Bullish: "border-lime-300/35 bg-lime-300/12 text-lime-200",
+    Watching: "border-blue-300/35 bg-blue-400/12 text-blue-100",
+    Risky: "border-amber-300/35 bg-amber-300/12 text-amber-100",
+    Avoid: "border-rose-300/35 bg-rose-300/12 text-rose-100",
   };
 
   return (
-    <span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold ${classes[stance]}`}>
+    <span className={`inline-flex rounded-lg border px-2 py-1 text-xs font-black ${classes[stance]}`}>
       {t(stanceKey(stance))}
     </span>
   );
 }
 
-function TokenPill({ token, stance }: { token: Token; stance?: Stance }) {
+function TokenCharacterCard({
+  token,
+  entry,
+  index = 0,
+  compact = false,
+}: {
+  token: Token;
+  entry?: WatchlistEntry;
+  index?: number;
+  compact?: boolean;
+}) {
+  const { t } = useLanguage();
+  const level = getTokenLevel(token, index);
+  const xp = getTokenXp(token, index);
+  const points = getTokenPoints(token, entry);
+  const performance = entry ? getEntryReturnPct(entry) : token.change7d;
+  const stance = mapStance(entry?.stance ?? (token.change7d > 0 ? "Bullish" : "Neutral"));
+  const tone = tokenTones[token.symbol] ?? "blue";
+
   return (
     <Link
       href={`/watch/token/${token.address}`}
-      className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-black/24 px-3 py-2 transition hover:border-sky-300/30 hover:bg-white/[0.055]"
+      className={cx(
+        "group relative block overflow-hidden rounded-2xl border bg-slate-950 shadow-[0_16px_45px_rgba(0,0,0,0.3)] transition hover:-translate-y-1 hover:border-blue-300/60",
+        compact ? "border-white/12" : "border-blue-300/25",
+      )}
     >
-      <span className="text-sm font-semibold text-white">{token.symbol}</span>
-      {stance ? <StanceChip stance={stance} /> : null}
-    </Link>
-  );
-}
-
-function WatchlistNetworkCard({
-  watchlist,
-  featured = false,
-}: {
-  watchlist: Watchlist;
-  featured?: boolean;
-}) {
-  const { t } = useLanguage();
-  const owner = getUserByAddress(watchlist.ownerAddress);
-  const performance = calculateWatchlistPerformance(watchlist);
-  const score = calculateWatchlistScore(watchlist, baseTokens, comments);
-
-  return (
-    <Card className={`p-5 ${featured ? "bg-sky-300/[0.055]" : ""}`}>
-      <div className="flex items-start gap-3">
-        <Avatar label={owner?.avatar ?? "MW"} />
-        <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div>
-              <Link
-                href={`/watch/list/${watchlist.id}`}
-                className="text-lg font-semibold text-white transition hover:text-sky-100"
-              >
-                {watchlist.title}
-              </Link>
-              <div className="mt-0.5 text-sm text-white/42">
-                {t("label.by")} @{owner?.handle ?? "unknown"}
-              </div>
-            </div>
-            <div className="rounded-full border border-sky-300/20 bg-sky-300/10 px-3 py-1 text-sm font-semibold text-sky-100">
-              {score}
-            </div>
-          </div>
-          <p className="mt-4 text-sm leading-6 text-white/58">
-            {watchlist.description}
-          </p>
-          <div className="mt-5 flex flex-wrap gap-2">
-            {watchlist.entries.slice(0, 3).map((entry) => {
-              const token = getTokenByAddress(entry.tokenAddress);
-              return token ? (
-                <TokenPill key={entry.tokenAddress} token={token} stance={entry.stance} />
-              ) : null;
-            })}
-          </div>
-          <div className="mt-5 grid grid-cols-3 gap-4">
-            <Metric
-              label={t("metric.performance")}
-              value={formatPercent(performance.weightedReturn)}
-              tone={performance.weightedReturn >= 0 ? "green" : "rose"}
-            />
-            <Metric label={t("metric.hitRate")} value={formatPercent(performance.hitRate)} tone="amber" />
-            <Metric label={t("metric.followers")} value={formatCompact(watchlist.followers)} tone="blue" />
-          </div>
+      <div className={`relative h-40 bg-gradient-to-br ${toneGradient(tone)} p-3`}>
+        <div className="absolute right-3 top-3 rounded-lg border border-white/15 bg-black/45 px-2 py-1 text-xs font-black text-white">
+          {index + 1}
+        </div>
+        <div className="absolute inset-x-5 bottom-4 h-24 rounded-[2rem] border border-white/12 bg-black/25" />
+        <div className="absolute bottom-7 left-1/2 grid size-24 -translate-x-1/2 place-items-center rounded-3xl border border-white/20 bg-black/35 text-4xl font-black text-white shadow-[0_0_30px_rgba(59,130,246,0.28)]">
+          {token.symbol.slice(0, 2)}
         </div>
       </div>
-    </Card>
-  );
-}
-
-function SignalPost({ comment }: { comment: Comment }) {
-  const { language, t } = useLanguage();
-  const author = getUserByAddress(comment.authorAddress);
-  const token =
-    comment.targetType === "token" ? getTokenByAddress(comment.targetId) : null;
-  const watchlist =
-    comment.targetType === "watchlist" ? getWatchlistById(comment.targetId) : null;
-  const href = token
-    ? `/watch/token/${token.address}`
-    : watchlist
-      ? `/watch/list/${watchlist.id}`
-      : "/watch";
-
-  return (
-    <Card className="p-5">
-      <div className="flex gap-3">
-        <Avatar label={author?.avatar ?? "MW"} />
-        <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div>
-              <Link
-                href={author ? `/watch/profile/${author.address}` : "/watch"}
-                className="font-semibold text-white transition hover:text-sky-100"
-              >
-                {author?.displayName ?? "Mergen Watch"}
-              </Link>
-              <div className="text-sm text-white/40">
-                @{author?.handle ?? "network"} · {dateLabel(comment.createdAt, language)}
-              </div>
-            </div>
-            {comment.stance ? <StanceChip stance={comment.stance} /> : null}
-          </div>
-          <p className="mt-4 text-[15px] leading-7 text-white/72">{comment.body}</p>
-          <Link
-            href={href}
-            className="mt-4 inline-flex rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5 text-xs font-semibold text-white/70 transition hover:border-emerald-300/25 hover:text-white"
-          >
-            {token ? `${t("cta.viewToken")} ${token.symbol}` : t("cta.viewList")}
-          </Link>
-          <div className="mt-4 flex items-center gap-5 text-xs text-white/38">
-            <span>{comment.likes} {t("label.likes")}</span>
-            <span>12 {t("label.replies")}</span>
-          </div>
-        </div>
-      </div>
-    </Card>
-  );
-}
-
-function WatcherRow({ user, rank }: { user: UserProfile; rank: number }) {
-  const { t } = useLanguage();
-  const stats = userWatchStats(user);
-  const bestLabel =
-    stats.bestToken && stats.bestEntry
-      ? `${stats.bestToken.symbol} ${formatPercent(getCallScore(stats.bestEntry))}`
-      : "-";
-
-  return (
-    <Link
-      href={`/watch/profile/${user.address}`}
-      className="flex items-center gap-3 rounded-2xl border border-white/10 bg-white/[0.03] p-4 transition hover:border-sky-300/25 hover:bg-white/[0.055]"
-    >
-      <span className="w-5 text-sm font-semibold text-white/38">#{rank}</span>
-      <Avatar label={user.avatar} size="sm" />
-      <div className="min-w-0 flex-1">
-        <div className="truncate text-sm font-semibold text-white">{user.displayName}</div>
-        <div className="text-xs text-white/40">@{user.handle}</div>
-      </div>
-      <div className="text-right">
-        <div className="text-sm font-semibold text-sky-100">{user.reputation}</div>
-        <div className="text-[11px] text-white/36">{t("metric.watchScore")}</div>
-      </div>
-      <div className="hidden text-right sm:block">
-        <div className="text-sm font-semibold text-emerald-100">{bestLabel}</div>
-        <div className="text-[11px] text-white/36">{t("metric.bestCall")}</div>
-      </div>
-    </Link>
-  );
-}
-
-function ProductPreview() {
-  const { t } = useLanguage();
-  const list = watchlists[0];
-  const owner = getUserByAddress(list.ownerAddress);
-  const token = baseTokens[0];
-  const watcher = users[0];
-  const score = calculateMergenWatchScore(token, getCommentsForToken(token.address));
-
-  return (
-    <div className="relative">
-      <div className="absolute inset-0 rounded-[2rem] border border-sky-300/10 bg-sky-300/6" />
-      <Card className="relative overflow-hidden rounded-[2rem] bg-[#07101a]/92 p-4 shadow-2xl shadow-black/40">
-        <div className="mb-4 flex items-center justify-between border-b border-white/10 pb-4">
+      <div className="p-4">
+        <div className="flex items-center justify-between gap-3">
           <div>
-            <div className="text-xs uppercase tracking-[0.16em] text-sky-200/64">
-              {t("landing.preview")}
-            </div>
-            <div className="mt-1 text-lg font-semibold text-white">Base watch network</div>
+            <div className="text-2xl font-black text-white">{token.symbol}</div>
+            <div className="text-xs text-slate-400">{token.name}</div>
           </div>
-          <DemoNotice compact />
+          <StanceBadge stance={stance} />
         </div>
-
-        <div className="grid gap-4 lg:grid-cols-[1.05fr_0.95fr]">
-          <div className="space-y-4">
-            <div className="rounded-2xl border border-white/10 bg-black/24 p-4">
-              <div className="mb-3 text-xs font-semibold uppercase tracking-[0.16em] text-white/38">
-                {t("landing.feedTitle")}
-              </div>
-              <div className="flex gap-3">
-                <Avatar label="BS" size="sm" />
-                <div>
-                  <div className="text-sm font-semibold text-white">Base Signal Desk</div>
-                  <p className="mt-2 text-sm leading-6 text-white/64">
-                    {t("landing.feedBody")}
-                  </p>
-                  <div className="mt-3 flex gap-2">
-                    <StanceChip stance="Bullish" />
-                    <span className="rounded-full bg-emerald-300/10 px-2.5 py-1 text-xs font-semibold text-emerald-100">
-                      +31.5%
-                    </span>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div className="rounded-2xl border border-white/10 bg-black/24 p-4">
-              <div className="mb-3 text-xs font-semibold uppercase tracking-[0.16em] text-white/38">
-                {t("landing.watchlistTitle")}
-              </div>
-              <div className="flex items-start justify-between gap-4">
-                <div>
-                  <div className="text-lg font-semibold text-white">{list.title}</div>
-                  <div className="mt-1 text-sm text-white/42">@{owner?.handle}</div>
-                </div>
-                <span className="rounded-full border border-sky-300/20 bg-sky-300/10 px-3 py-1 text-sm font-semibold text-sky-100">
-                  83
-                </span>
-              </div>
-              <div className="mt-4 flex flex-wrap gap-2">
-                {list.entries.slice(0, 3).map((entry) => {
-                  const entryToken = getTokenByAddress(entry.tokenAddress);
-                  return entryToken ? (
-                    <TokenPill key={entry.tokenAddress} token={entryToken} stance={entry.stance} />
-                  ) : null;
-                })}
-              </div>
-            </div>
-          </div>
-
-          <div className="space-y-4">
-            <div className="rounded-2xl border border-white/10 bg-black/24 p-4">
-              <div className="mb-3 text-xs font-semibold uppercase tracking-[0.16em] text-white/38">
-                {t("landing.watcherTitle")}
-              </div>
-              <div className="flex items-center gap-3">
-                <Avatar label={watcher.avatar} />
-                <div className="flex-1">
-                  <div className="font-semibold text-white">{watcher.displayName}</div>
-                  <div className="text-sm text-white/42">@{watcher.handle}</div>
-                </div>
-                <Metric label={t("metric.watchScore")} value={watcher.reputation.toString()} tone="blue" />
-              </div>
-            </div>
-
-            <div className="rounded-2xl border border-white/10 bg-black/24 p-4">
-              <div className="mb-3 text-xs font-semibold uppercase tracking-[0.16em] text-white/38">
-                {t("landing.tokenTitle")}
-              </div>
-              <div className="flex items-start justify-between gap-4">
-                <div>
-                  <div className="text-3xl font-semibold text-white">{token.symbol}</div>
-                  <div className="mt-1 text-sm text-white/44">{token.name}</div>
-                </div>
-                <StanceChip stance="Bullish" />
-              </div>
-              <div className="mt-5 grid grid-cols-2 gap-4">
-                <Metric label={t("metric.watchScore")} value={score.toString()} tone="blue" />
-                <Metric label="7D" value={formatPercent(token.change7d)} tone="green" />
-              </div>
-            </div>
+        <div className="mt-4 flex items-center justify-between text-xs font-black">
+          <span className="text-blue-300">{t("metric.level")} {level}</span>
+          <span className={performance >= 0 ? "text-lime-300" : "text-rose-300"}>
+            {formatPercent(performance)}
+          </span>
+        </div>
+        <div className="mt-2">
+          <XpBar value={xp} max={1800} />
+          <div className="mt-1 text-right text-[11px] text-slate-500">
+            {xp.toLocaleString()} / 1,800 XP
           </div>
         </div>
-      </Card>
+        <div className="mt-4 grid grid-cols-2 gap-3 border-t border-white/10 pt-3">
+          <div>
+            <div className="text-xs text-blue-300">{t("metric.xp")}</div>
+            <div className="font-black text-white">{xp}</div>
+          </div>
+          <div>
+            <div className="text-xs text-lime-300">{t("metric.points")}</div>
+            <div className="font-black text-white">{formatPoints(points)}</div>
+          </div>
+        </div>
+      </div>
+    </Link>
+  );
+}
+
+function EmptySquadSlot() {
+  const { t } = useLanguage();
+
+  return (
+    <div className="grid min-h-[316px] place-items-center rounded-2xl border border-dashed border-slate-600 bg-slate-950/58 p-5 text-center">
+      <div>
+        <div className="mx-auto grid size-20 place-items-center rounded-full border border-lime-300/35 bg-lime-300/8 text-5xl font-light text-lime-300">
+          +
+        </div>
+        <div className="mt-5 text-lg font-black text-lime-300">{t("squad.add")}</div>
+        <p className="mt-2 max-w-36 text-sm leading-6 text-slate-400">{t("squad.addText")}</p>
+      </div>
+    </div>
+  );
+}
+
+function SquadPanel({ compact = false }: { compact?: boolean }) {
+  const { t } = useLanguage();
+  const entries = getSquadEntries();
+  const usedSlots = entries.length;
+
+  return (
+    <GamePanel className="p-5">
+      <PanelTitle
+        title={t("section.yourSquad")}
+        right={
+          <div className="flex items-center gap-3">
+            <div className="text-sm font-black text-blue-300">
+              {usedSlots} / {maxSquadSlots} {t("squad.slots").toUpperCase()}
+            </div>
+            <div className="rounded-xl border border-lime-300/20 bg-black/35 px-3 py-2 text-sm font-black text-lime-300">
+              {t("squad.power")} {formatPoints(getSquadPower())}
+            </div>
+          </div>
+        }
+      />
+      <p className="mt-2 text-sm text-slate-400">{t("squad.subtitle")}</p>
+      <div className={cx("mt-5 grid gap-4", compact ? "md:grid-cols-3" : "sm:grid-cols-2 xl:grid-cols-5")}>
+        {entries.map((entry, index) => {
+          const token = getTokenByAddress(entry.tokenAddress);
+          return token ? (
+            <TokenCharacterCard key={entry.tokenAddress} token={token} entry={entry} index={index} />
+          ) : null;
+        })}
+        {!compact ? (
+          <>
+            <EmptySquadSlot />
+            <EmptySquadSlot />
+          </>
+        ) : null}
+      </div>
+    </GamePanel>
+  );
+}
+
+function WeeklySeasonPanel() {
+  const { t } = useLanguage();
+
+  return (
+    <GamePanel className="p-5">
+      <PanelTitle title={t("section.weeklySeason")} />
+      <div className="mt-4 rounded-xl border border-white/10 bg-black/28 px-4 py-3">
+        <div className="flex justify-between gap-3 text-sm">
+          <span className="text-slate-300">{t("season.name")}</span>
+          <span className="font-bold text-blue-300">{t("season.ends")}</span>
+        </div>
+      </div>
+      <div className="mt-5 rounded-2xl border border-blue-300/12 bg-black/24 p-5">
+        <div className="flex items-center gap-5">
+          <div className="grid size-20 place-items-center rounded-2xl border border-blue-300/30 bg-blue-500/15 text-3xl font-black text-blue-200">
+            A
+          </div>
+          <div>
+            <div className="text-xs font-black uppercase tracking-wide text-slate-400">
+              {t("season.rank")}
+            </div>
+            <div className="text-4xl font-black text-white">#{playerRank}</div>
+            <div className="font-black text-blue-300">{t("season.top")}</div>
+          </div>
+        </div>
+        <div className="mt-5 flex items-center justify-between text-sm">
+          <span className="text-slate-300">{t("season.weeklyPoints")}</span>
+          <span className="font-black text-amber-200">12,540</span>
+        </div>
+        <div className="mt-2">
+          <XpBar value={12540} max={15000} />
+        </div>
+      </div>
+      <div className="mt-5">
+        <div className="mb-3 text-sm font-black uppercase tracking-wide text-slate-400">
+          {t("season.rewards")}
+        </div>
+        <div className="grid grid-cols-3 gap-3">
+          {["10K", "15K", "20K"].map((reward, index) => (
+            <div
+              key={reward}
+              className={cx(
+                "rounded-xl border p-3 text-center",
+                index === 1 ? "border-amber-300/40 bg-amber-300/10" : "border-white/10 bg-black/24",
+              )}
+            >
+              <div className="mx-auto mb-2 grid size-10 place-items-center rounded-xl border border-white/15 bg-white/8 font-black text-white">
+                {index + 1}
+              </div>
+              <div className="text-xs font-black text-slate-300">{reward} PTS</div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </GamePanel>
+  );
+}
+
+function ProfilePanel({ address = users[0].address }: { address?: string }) {
+  const { t } = useLanguage();
+  const user = getUserByAddress(address) ?? users[0];
+  const stats = userWatchStats(user);
+
+  return (
+    <GamePanel className="p-5">
+      <PanelTitle title={t("section.profile")} />
+      <div className="mt-5 flex items-center gap-4">
+        <PixelAvatar label={user.avatar} tone="green" selected />
+        <div className="min-w-0 flex-1">
+          <div className="font-black text-white">{address === users[0].address ? t("profile.handle") : `@${user.handle}`}</div>
+          <div className="text-sm text-slate-400">{address === users[0].address ? t("profile.role") : user.role}</div>
+          <div className="mt-2">
+            <XpBar value={1250} max={2000} />
+            <div className="mt-1 text-right text-[11px] text-slate-500">1,250 / 2,000 XP</div>
+          </div>
+        </div>
+      </div>
+      <button className="mt-5 w-full rounded-xl border border-blue-400/40 bg-blue-500/16 px-4 py-3 text-sm font-black text-white">
+        {t("profile.connect")}
+      </button>
+      <div className="mt-5 text-xs font-black uppercase tracking-wide text-slate-400">
+        {t("profile.chooseAvatar")}
+      </div>
+      <div className="mt-3 grid grid-cols-4 gap-3">
+        {avatarOptions.map((avatar, index) => (
+          <PixelAvatar
+            key={avatar}
+            label={avatar}
+            tone={(["green", "blue", "gold", "violet", "cyan", "rose", "blue", "gold"] as ArtTone[])[index]}
+            selected={index === 0}
+          />
+        ))}
+      </div>
+      <Link
+        href={`/watch/profile/${user.address}`}
+        className="mt-5 block rounded-xl border border-blue-400/30 bg-black/24 px-4 py-3 text-center text-sm font-black text-blue-200 transition hover:bg-blue-500/10"
+      >
+        {t("profile.view")}
+      </Link>
+      {address !== users[0].address ? (
+        <div className="mt-5 grid grid-cols-3 gap-4">
+          <MiniMetric label={t("metric.hitRate")} value={formatPercent(stats.hitRate)} />
+          <MiniMetric label={t("metric.watchScore")} value={user.reputation.toString()} />
+          <MiniMetric label={t("metric.followers")} value={formatCompact(user.followers)} />
+        </div>
+      ) : null}
+    </GamePanel>
+  );
+}
+
+function MiniMetric({ label, value }: { label: string; value: string }) {
+  return (
+    <div>
+      <div className="text-[11px] uppercase text-slate-500">{label}</div>
+      <div className="mt-1 font-black text-white">{value}</div>
+    </div>
+  );
+}
+
+function BadgesPanel() {
+  const { t } = useLanguage();
+
+  return (
+    <GamePanel id="badges" className="p-5">
+      <PanelTitle title={t("section.badges")} />
+      <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-4">
+        {badgeKeys.map(([titleKey, metaKey, tone], index) => (
+          <div key={titleKey} className="rounded-xl border border-white/10 bg-black/24 p-3">
+            <div
+              className={cx(
+                "grid size-14 place-items-center rounded-2xl border text-2xl font-black",
+                tone === "green" && "border-lime-300/30 bg-lime-300/10 text-lime-200",
+                tone === "blue" && "border-blue-300/30 bg-blue-300/10 text-blue-200",
+                tone === "gold" && "border-amber-300/30 bg-amber-300/10 text-amber-200",
+                tone === "violet" && "border-violet-300/30 bg-violet-300/10 text-violet-200",
+              )}
+            >
+              {index + 1}
+            </div>
+            <div className="mt-3 text-sm font-black text-white">{t(titleKey)}</div>
+            <div className="text-xs text-slate-500">{t(metaKey)}</div>
+          </div>
+        ))}
+      </div>
+    </GamePanel>
+  );
+}
+
+function LeaderboardPanel({ full = false }: { full?: boolean }) {
+  const { t } = useLanguage();
+  const rows = full ? leaderboard : leaderboard.slice(0, 6);
+
+  return (
+    <GamePanel id="leaderboard" className="p-5">
+      <PanelTitle title={t("section.leaderboard")} right={<span className="text-xs font-bold text-blue-300">{t("season.ends")}</span>} />
+      <div className="mt-4 space-y-2">
+        {rows.map((row, index) => (
+          <div
+            key={row.handle}
+            className={cx(
+              "flex items-center gap-3 rounded-xl border p-3",
+              row.active ? "border-blue-400/50 bg-blue-500/14" : "border-white/8 bg-black/24",
+            )}
+          >
+            <div className="w-8 text-center text-sm font-black text-amber-200">
+              {row.rank ?? index + 1}
+            </div>
+            <PixelAvatar label={row.avatar} tone={index % 2 === 0 ? "blue" : "violet"} size="sm" />
+            <div className="min-w-0 flex-1 truncate text-sm font-black text-white">{row.handle}</div>
+            <div className="text-sm font-black text-amber-200">{formatPoints(row.points)}</div>
+          </div>
+        ))}
+      </div>
+    </GamePanel>
+  );
+}
+
+function ActivityFeed({ limit = 4 }: { limit?: number }) {
+  const { t } = useLanguage();
+  const items = comments.slice(0, limit);
+
+  return (
+    <GamePanel className="p-5">
+      <PanelTitle title={t("section.signals")} />
+      <div className="mt-4 space-y-2">
+        {items.map((comment) => {
+          const author = getUserByAddress(comment.authorAddress);
+          const action = gameActionForComment(comment);
+          const token = action.token;
+          const targetHref = token ? `/watch/token/${token.address}` : "/watch";
+
+          return (
+            <Link
+              key={comment.id}
+              href={targetHref}
+              className="grid gap-3 rounded-xl border border-white/8 bg-black/24 p-3 transition hover:border-blue-300/25 sm:grid-cols-[auto_1fr_auto]"
+            >
+              <PixelAvatar label={author?.avatar ?? "MW"} tone="blue" size="sm" />
+              <div className="min-w-0">
+                <div className="text-sm text-slate-300">
+                  <span className="font-black text-white">@{author?.handle ?? "watcher"}</span>{" "}
+                  {t(action.key)}{" "}
+                  {token ? <span className="font-black text-white">{token.symbol}</span> : t("badge.top10")}{" "}
+                  {action.key === "signal.added" ? t("signal.toSquad") : action.key === "signal.earned" ? t("signal.badge") : t("signal.potential")}
+                </div>
+                <div className="mt-1 truncate text-xs text-slate-500">{comment.body}</div>
+              </div>
+              <div className="text-right text-sm font-black text-lime-300">
+                +{action.points}
+                <div className="text-[11px] text-slate-500">{t("metric.points")}</div>
+              </div>
+            </Link>
+          );
+        })}
+      </div>
+    </GamePanel>
+  );
+}
+
+function HowItWorksPanel() {
+  const { t } = useLanguage();
+  const steps: CopyKey[] = ["how.step1", "how.step2", "how.step3", "how.step4"];
+
+  return (
+    <GamePanel id="roadmap" className="p-5">
+      <PanelTitle title={t("section.how")} />
+      <div className="mt-5 grid gap-3 md:grid-cols-4">
+        {steps.map((step, index) => (
+          <div key={step} className="rounded-xl border border-white/8 bg-black/24 p-4">
+            <div className="grid size-9 place-items-center rounded-xl border border-blue-400/25 bg-blue-500/12 text-sm font-black text-blue-200">
+              {index + 1}
+            </div>
+            <div className="mt-4 text-sm font-black text-white">{t(step)}</div>
+          </div>
+        ))}
+      </div>
+      <p className="mt-5 text-sm leading-6 text-slate-400">{t("roadmap.copy")}</p>
+    </GamePanel>
+  );
+}
+
+function LobbyPreview() {
+  return (
+    <div className="grid gap-4 xl:grid-cols-[0.9fr_1.35fr_1fr]">
+      <div className="space-y-4">
+        <WeeklySeasonPanel />
+        <BadgesPanel />
+      </div>
+      <div className="space-y-4">
+        <SquadPanel />
+        <ActivityFeed />
+      </div>
+      <div className="space-y-4">
+        <ProfilePanel />
+        <LeaderboardPanel />
+      </div>
     </div>
   );
 }
 
 export function LandingPageView() {
   const { t } = useLanguage();
-  const pillars = [
-    ["landing.pillar1", "landing.pillar1Text"],
-    ["landing.pillar2", "landing.pillar2Text"],
-    ["landing.pillar3", "landing.pillar3Text"],
-  ] as const;
 
   return (
-    <div className="min-h-screen bg-[#05070c] text-white">
+    <div className="min-h-screen bg-[#030711] text-white">
       <TopNavigation />
-      <main className="mx-auto max-w-7xl px-5 py-12 md:py-16">
-        <section className="grid min-h-[72vh] items-center gap-12 lg:grid-cols-[0.9fr_1.1fr]">
+      <main className="mx-auto max-w-[1600px] px-5 py-8">
+        <section className="grid gap-8 border-b border-blue-300/12 pb-8 xl:grid-cols-[0.68fr_1.32fr] xl:items-center">
           <div>
-            <DemoNotice />
-            <h1 className="mt-8 max-w-3xl text-5xl font-semibold leading-[1.02] tracking-tight text-white md:text-7xl">
-              {t("landing.headline")}
+            <div className="inline-flex rounded-xl border border-lime-300/25 bg-lime-300/10 px-4 py-2 text-sm font-black text-lime-200">
+              {t("demo.notice")}
+            </div>
+            <h1 className="mt-7 max-w-3xl text-5xl font-black leading-[0.98] tracking-tight text-white md:text-7xl">
+              {t("hero.title")}
             </h1>
-            <p className="mt-6 max-w-2xl text-xl leading-9 text-white/68">
-              {t("landing.subheadline")}
+            <p className="mt-6 max-w-2xl text-xl leading-9 text-slate-300">
+              {t("hero.subtitle")}
             </p>
-            <div className="mt-9 flex flex-wrap gap-3">
+            <div className="mt-8 flex flex-wrap gap-3">
               <Link
                 href="/watch"
-                className="rounded-full bg-white px-5 py-3 text-sm font-semibold text-[#061017] transition hover:bg-emerald-100"
+                className="rounded-xl bg-blue-500 px-5 py-3 text-sm font-black text-white shadow-[0_0_26px_rgba(37,99,235,0.35)] transition hover:bg-blue-400"
               >
-                {t("landing.primary")}
+                {t("hero.primary")}
               </Link>
               <Link
                 href="#roadmap"
-                className="rounded-full border border-white/12 bg-white/[0.04] px-5 py-3 text-sm font-semibold text-white transition hover:bg-white/10"
+                className="rounded-xl border border-white/12 bg-white/5 px-5 py-3 text-sm font-black text-white transition hover:bg-white/10"
               >
-                {t("landing.secondary")}
+                {t("hero.secondary")}
               </Link>
             </div>
+            <div className="mt-8 inline-flex rounded-xl border border-lime-300/20 bg-black/40 px-4 py-2 font-black uppercase tracking-[0.24em] text-lime-300">
+              {t("hero.command")}
+            </div>
           </div>
-          <ProductPreview />
+          <GamePanel className="p-4">
+            <PanelTitle title={t("home.visual")} />
+            <div className="mt-5">
+              <LobbyPreview />
+            </div>
+          </GamePanel>
         </section>
 
-        <section className="mt-16 grid gap-5 md:grid-cols-3">
-          {pillars.map(([titleKey, textKey]) => (
-            <Card key={titleKey} className="p-6">
-              <div className="mb-5 h-1 w-12 rounded-full bg-emerald-300" />
-              <h2 className="text-xl font-semibold text-white">{t(titleKey)}</h2>
-              <p className="mt-3 text-sm leading-7 text-white/58">{t(textKey)}</p>
-            </Card>
+        <section className="mt-8 grid gap-4 md:grid-cols-3">
+          {[
+            ["home.pillar1", "home.pillar1Text"],
+            ["home.pillar2", "home.pillar2Text"],
+            ["home.pillar3", "home.pillar3Text"],
+          ].map(([titleKey, textKey], index) => (
+            <GamePanel key={titleKey} className="p-5">
+              <div className="grid size-11 place-items-center rounded-xl border border-blue-400/25 bg-blue-500/12 text-lg font-black text-blue-200">
+                {index + 1}
+              </div>
+              <h2 className="mt-5 text-xl font-black text-white">{t(titleKey as CopyKey)}</h2>
+              <p className="mt-3 text-sm leading-7 text-slate-400">{t(textKey as CopyKey)}</p>
+            </GamePanel>
           ))}
         </section>
-
-        <section id="roadmap" className="mt-16 border-t border-white/10 pt-10">
-          <SectionHeader title={t("landing.roadmapTitle")}>
-            {t("landing.roadmapText")}
-          </SectionHeader>
-        </section>
+        <div className="mt-8">
+          <HowItWorksPanel />
+        </div>
       </main>
     </div>
   );
@@ -564,68 +796,78 @@ export function LandingPageView() {
 
 export function WatchDashboardView() {
   const { t } = useLanguage();
-  const topWatchers = [...users].sort((a, b) => b.reputation - a.reputation);
 
   return (
-    <div className="space-y-8">
-      <div className="flex flex-col gap-5 border-b border-white/10 pb-8 lg:flex-row lg:items-end lg:justify-between">
-        <SectionHeader title={t("watch.title")}>{t("watch.subtitle")}</SectionHeader>
-        <DemoNotice compact />
+    <div className="space-y-5">
+      <div className="grid gap-5 xl:grid-cols-[0.82fr_2.2fr_1fr]">
+        <div className="space-y-5">
+          <WeeklySeasonPanel />
+          <BadgesPanel />
+        </div>
+        <div className="space-y-5">
+          <SquadPanel />
+          <div className="grid gap-5 lg:grid-cols-[1fr_0.8fr]">
+            <ActivityFeed limit={5} />
+            <HowItWorksPanel />
+          </div>
+        </div>
+        <div className="space-y-5">
+          <ProfilePanel />
+          <LeaderboardPanel />
+        </div>
       </div>
-
-      <div className="grid gap-6 xl:grid-cols-[0.9fr_1.25fr_0.85fr]">
-        <aside className="space-y-4">
-          <SectionHeader title={t("watch.left")} />
-          {watchlists.slice(0, 3).map((watchlist, index) => (
-            <WatchlistNetworkCard
-              key={watchlist.id}
-              watchlist={watchlist}
-              featured={index === 0}
-            />
+      <GamePanel className="p-5">
+        <PanelTitle title={t("section.watchlists")} />
+        <div className="mt-5 grid gap-4 lg:grid-cols-2 xl:grid-cols-4">
+          {watchlists.map((watchlist) => (
+            <WatchlistLeagueCard key={watchlist.id} watchlist={watchlist} />
           ))}
-        </aside>
-
-        <section className="space-y-4">
-          <SectionHeader title={t("watch.center")} />
-          {comments.slice(0, 5).map((comment) => (
-            <SignalPost key={comment.id} comment={comment} />
-          ))}
-        </section>
-
-        <aside className="space-y-4">
-          <SectionHeader title={t("watch.right")} />
-          <Card className="p-4">
-            <div className="mb-4 text-sm font-semibold text-white">
-              {t("watch.leaderboard")}
-            </div>
-            <div className="space-y-3">
-              {topWatchers.map((user, index) => (
-                <WatcherRow key={user.address} user={user} rank={index + 1} />
-              ))}
-            </div>
-          </Card>
-
-          <Card className="p-5">
-            <div className="text-sm font-semibold text-white">{t("watch.how")}</div>
-            <div className="mt-4 space-y-3 text-sm text-white/58">
-              {[t("watch.how1"), t("watch.how2"), t("watch.how3")].map((item, index) => (
-                <div key={item} className="flex items-center gap-3">
-                  <span className="grid size-7 place-items-center rounded-full bg-white/8 text-xs font-semibold text-emerald-100">
-                    {index + 1}
-                  </span>
-                  <span>{item}</span>
-                </div>
-              ))}
-            </div>
-          </Card>
-        </aside>
-      </div>
+        </div>
+      </GamePanel>
     </div>
   );
 }
 
+function WatchlistLeagueCard({ watchlist }: { watchlist: Watchlist }) {
+  const { t } = useLanguage();
+  const owner = getUserByAddress(watchlist.ownerAddress);
+  const performance = calculateWatchlistPerformance(watchlist);
+  const score = calculateWatchlistScore(watchlist, baseTokens, comments);
+
+  return (
+    <Link
+      href={`/watch/list/${watchlist.id}`}
+      className="rounded-2xl border border-white/10 bg-black/24 p-4 transition hover:-translate-y-1 hover:border-blue-300/40"
+    >
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <div className="font-black text-white">{watchlist.title}</div>
+          <div className="text-xs text-slate-500">@{owner?.handle ?? "watcher"}</div>
+        </div>
+        <div className="rounded-xl border border-lime-300/20 bg-lime-300/10 px-3 py-1 text-sm font-black text-lime-200">
+          {score}
+        </div>
+      </div>
+      <div className="mt-4 flex flex-wrap gap-2">
+        {watchlist.entries.slice(0, 3).map((entry) => {
+          const token = getTokenByAddress(entry.tokenAddress);
+          return token ? (
+            <span key={entry.tokenAddress} className="rounded-lg bg-white/7 px-2 py-1 text-xs font-black text-white">
+              {token.symbol}
+            </span>
+          ) : null;
+        })}
+      </div>
+      <div className="mt-5 grid grid-cols-2 gap-3">
+        <MiniMetric label={t("metric.performance")} value={formatPercent(performance.weightedReturn)} />
+        <MiniMetric label={t("metric.hitRate")} value={formatPercent(performance.hitRate)} />
+      </div>
+    </Link>
+  );
+}
+
 export function ProfilePageView({ address }: { address: string }) {
-  const { language, t } = useLanguage();
+  const { t } = useLanguage();
   const user = getUserByAddress(address);
 
   if (!user) {
@@ -633,98 +875,81 @@ export function ProfilePageView({ address }: { address: string }) {
   }
 
   const stats = userWatchStats(user);
-  const userComments = comments.filter(
-    (comment) => comment.authorAddress.toLowerCase() === user.address.toLowerCase(),
-  );
   const bestLabel =
     stats.bestToken && stats.bestEntry
       ? `${stats.bestToken.symbol} ${formatPercent(getCallScore(stats.bestEntry))}`
       : "-";
+  const userComments = comments.filter(
+    (comment) => comment.authorAddress.toLowerCase() === user.address.toLowerCase(),
+  );
 
   return (
-    <div className="space-y-8">
-      <Link href="/watch" className="text-sm text-white/52 transition hover:text-white">
+    <div className="space-y-5">
+      <Link href="/watch" className="text-sm font-black text-blue-300 hover:text-white">
         {t("nav.back")}
       </Link>
-
-      <Card className="p-6 md:p-8">
-        <div className="flex flex-col gap-6 md:flex-row md:items-end md:justify-between">
-          <div className="flex items-start gap-5">
-            <Avatar label={user.avatar} size="lg" />
-            <div>
-              <div className="text-xs font-semibold uppercase tracking-[0.16em] text-sky-200/70">
-                {t("profile.title")}
-              </div>
-              <h1 className="mt-2 text-4xl font-semibold tracking-tight text-white">
-                {user.displayName}
-              </h1>
-              <div className="mt-2 text-white/48">
-                @{user.handle} · {shortAddress(user.address)}
-              </div>
-              <p className="mt-5 max-w-3xl text-base leading-8 text-white/64">
-                {user.bio}
-              </p>
-            </div>
+      <GamePanel className="p-6">
+        <div className="grid gap-6 lg:grid-cols-[auto_1fr_auto] lg:items-center">
+          <PixelAvatar label={user.avatar} tone="green" selected />
+          <div>
+            <div className="text-sm font-black uppercase tracking-wide text-blue-300">{t("section.profile")}</div>
+            <h1 className="mt-2 text-4xl font-black text-white">{user.displayName}</h1>
+            <p className="mt-3 max-w-3xl text-slate-400">{user.bio}</p>
+            <div className="mt-3 font-mono text-xs text-slate-500">{shortAddress(user.address)}</div>
           </div>
-          <div className="grid grid-cols-2 gap-5 sm:grid-cols-4">
-            <Metric label={t("metric.watchScore")} value={user.reputation.toString()} tone="blue" />
-            <Metric label={t("profile.bestCall")} value={bestLabel} tone="green" />
-            <Metric label={t("metric.hitRate")} value={formatPercent(stats.hitRate)} tone="amber" />
-            <Metric label={t("metric.followers")} value={formatCompact(user.followers)} />
+          <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+            <MiniMetric label={t("metric.watchScore")} value={user.reputation.toString()} />
+            <MiniMetric label={t("metric.bestCall")} value={bestLabel} />
+            <MiniMetric label={t("metric.hitRate")} value={formatPercent(stats.hitRate)} />
+            <MiniMetric label={t("metric.followers")} value={formatCompact(user.followers)} />
           </div>
         </div>
-        <div className="mt-6 text-sm text-white/42">
-          {t("label.joined")} {dateLabel(user.joined, language)}
+      </GamePanel>
+      <div className="grid gap-5 lg:grid-cols-[1fr_1.15fr]">
+        <div className="space-y-5">
+          <ProfilePanel address={user.address} />
+          <BadgesPanel />
         </div>
-      </Card>
-
-      <div className="grid gap-6 lg:grid-cols-[0.85fr_1.15fr]">
-        <section className="space-y-4">
-          <SectionHeader title={t("profile.publicWatchlists")} />
-          {stats.ownedLists.map((watchlist) => (
-            <WatchlistNetworkCard key={watchlist.id} watchlist={watchlist} />
-          ))}
-          <SectionHeader title={t("profile.badges")} />
-          <Card className="p-5">
-            <div className="space-y-3">
-              {user.badges.map((badge) => (
-                <div key={badge.label} className="rounded-2xl bg-black/24 p-4">
-                  <div className="font-semibold text-white">{badge.label}</div>
-                  <p className="mt-1 text-sm leading-6 text-white/56">{badge.description}</p>
-                </div>
+        <div className="space-y-5">
+          <GamePanel className="p-5">
+            <PanelTitle title={t("section.watchlists")} />
+            <div className="mt-5 grid gap-4 md:grid-cols-2">
+              {stats.ownedLists.map((watchlist) => (
+                <WatchlistLeagueCard key={watchlist.id} watchlist={watchlist} />
               ))}
             </div>
-          </Card>
-        </section>
-
-        <section className="space-y-4">
-          <SectionHeader title={t("profile.recentSignals")}>{t("profile.subtitle")}</SectionHeader>
-          {userComments.length > 0 ? (
-            userComments.map((comment) => <SignalPost key={comment.id} comment={comment} />)
-          ) : (
-            <Card className="p-5 text-white/50">{t("label.empty")}</Card>
-          )}
-        </section>
+          </GamePanel>
+          <GamePanel className="p-5">
+            <PanelTitle title={t("section.signals")} />
+            <div className="mt-4 space-y-2">
+              {userComments.map((comment) => (
+                <SignalRow key={comment.id} comment={comment} />
+              ))}
+            </div>
+          </GamePanel>
+        </div>
       </div>
     </div>
   );
 }
 
-function StanceDistribution({ entries }: { entries: Watchlist["entries"] }) {
+function SignalRow({ comment }: { comment: Comment }) {
   const { t } = useLanguage();
+  const author = getUserByAddress(comment.authorAddress);
+  const action = gameActionForComment(comment);
+  const token = action.token;
 
   return (
-    <div className="grid gap-2 sm:grid-cols-4">
-      {stances.map((stance) => {
-        const count = entries.filter((entry) => entry.stance === stance).length;
-        return (
-          <div key={stance} className="rounded-2xl border border-white/10 bg-black/24 p-3">
-            <StanceChip stance={stance} />
-            <div className="mt-3 text-2xl font-semibold text-white">{count}</div>
-            <div className="text-xs text-white/38">{t("list.stanceMix")}</div>
-          </div>
-        );
-      })}
+    <div className="grid gap-3 rounded-xl border border-white/8 bg-black/24 p-3 sm:grid-cols-[auto_1fr_auto]">
+          <PixelAvatar label={author?.avatar ?? "MW"} tone="blue" size="sm" />
+      <div className="min-w-0">
+        <div className="text-sm text-slate-300">
+          <span className="font-black text-white">@{author?.handle ?? "watcher"}</span>{" "}
+          {t(action.key)} {token ? token.symbol : t("badge.top10")}
+        </div>
+        <div className="truncate text-xs text-slate-500">{comment.body}</div>
+      </div>
+      <div className="font-black text-lime-300">+{action.points}</div>
     </div>
   );
 }
@@ -738,124 +963,62 @@ export function WatchlistDetailView({ id }: { id: string }) {
   }
 
   const owner = getUserByAddress(watchlist.ownerAddress);
-  const listComments = getCommentsForWatchlist(watchlist.id);
   const performance = calculateWatchlistPerformance(watchlist);
   const score = calculateWatchlistScore(watchlist, baseTokens, comments);
+  const listComments = getCommentsForWatchlist(watchlist.id);
 
   return (
-    <div className="space-y-8">
-      <Link href="/watch" className="text-sm text-white/52 transition hover:text-white">
+    <div className="space-y-5">
+      <Link href="/watch" className="text-sm font-black text-blue-300 hover:text-white">
         {t("nav.back")}
       </Link>
-
-      <Card className="p-6 md:p-8">
-        <div className="grid gap-8 lg:grid-cols-[1fr_0.62fr]">
+      <GamePanel className="p-6">
+        <div className="grid gap-6 lg:grid-cols-[1fr_auto]">
           <div>
-            <div className="text-sm text-sky-200/72">{t("list.creator")}</div>
-            <Link
-              href={owner ? `/watch/profile/${owner.address}` : "/watch"}
-              className="mt-2 inline-flex items-center gap-3 text-white/72 transition hover:text-white"
-            >
-              <Avatar label={owner?.avatar ?? "MW"} size="sm" />
-              @{owner?.handle ?? "unknown"}
-            </Link>
-            <h1 className="mt-6 text-4xl font-semibold tracking-tight text-white md:text-6xl">
-              {watchlist.title}
-            </h1>
-            <p className="mt-5 max-w-3xl text-base leading-8 text-white/64">
-              {watchlist.description}
-            </p>
+            <div className="text-sm font-black text-blue-300">
+              {t("list.creator")} @{owner?.handle ?? "watcher"}
+            </div>
+            <h1 className="mt-3 text-4xl font-black text-white md:text-6xl">{watchlist.title}</h1>
+            <p className="mt-4 max-w-3xl text-slate-400">{watchlist.description}</p>
           </div>
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-1">
-            <Metric label={t("metric.watchScore")} value={score.toString()} tone="blue" />
-            <Metric
-              label={t("list.totalPerformance")}
-              value={formatPercent(performance.weightedReturn)}
-              tone={performance.weightedReturn >= 0 ? "green" : "rose"}
-            />
-            <Metric label={t("metric.hitRate")} value={formatPercent(performance.hitRate)} tone="amber" />
+          <div className="grid grid-cols-3 gap-4">
+            <MiniMetric label={t("metric.watchScore")} value={score.toString()} />
+            <MiniMetric label={t("list.total")} value={formatPercent(performance.weightedReturn)} />
+            <MiniMetric label={t("metric.hitRate")} value={formatPercent(performance.hitRate)} />
           </div>
         </div>
-      </Card>
-
-      <section className="space-y-4">
-        <SectionHeader title={t("list.stanceMix")} />
-        <StanceDistribution entries={watchlist.entries} />
-      </section>
-
-      <section className="space-y-4">
-        <SectionHeader title={t("list.tokens")}>{t("list.subtitle")}</SectionHeader>
-        <div className="space-y-3">
-          {watchlist.entries.map((entry) => {
+      </GamePanel>
+      <GamePanel className="p-5">
+        <PanelTitle title={t("list.tokens")} />
+        <div className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+          {watchlist.entries.map((entry, index) => {
             const token = getTokenByAddress(entry.tokenAddress);
-            if (!token) {
-              return null;
-            }
-            const returnPct = getEntryReturnPct(entry);
-
-            return (
-              <Card key={entry.tokenAddress} className="p-4">
-                <div className="grid gap-4 md:grid-cols-[0.45fr_0.85fr_0.28fr] md:items-center">
-                  <div className="flex items-center gap-3">
-                    <div className="grid size-11 place-items-center rounded-full bg-white/8 text-sm font-semibold text-white">
-                      {token.symbol.slice(0, 2)}
-                    </div>
-                    <div>
-                      <Link
-                        href={`/watch/token/${token.address}`}
-                        className="font-semibold text-white transition hover:text-sky-100"
-                      >
-                        {token.symbol}
-                      </Link>
-                      <div className="text-sm text-white/42">{token.name}</div>
-                    </div>
-                  </div>
-                  <div>
-                    <div className="flex flex-wrap items-center gap-2">
-                      <StanceChip stance={entry.stance} />
-                      <span className="text-xs text-white/38">
-                        {t("metric.conviction")} {entry.conviction}
-                      </span>
-                    </div>
-                    <p className="mt-2 text-sm leading-6 text-white/60">{entry.thesis}</p>
-                  </div>
-                  <div className="text-left md:text-right">
-                    <div className={`text-lg font-semibold ${toneClass(returnPct)}`}>
-                      {formatPercent(returnPct)}
-                    </div>
-                    <Link
-                      href={`/watch/token/${token.address}`}
-                      className="mt-2 inline-flex text-xs font-semibold text-sky-100 hover:text-white"
-                    >
-                      {t("cta.viewToken")}
-                    </Link>
-                  </div>
-                </div>
-              </Card>
-            );
+            return token ? (
+              <TokenCharacterCard key={entry.tokenAddress} token={token} entry={entry} index={index} />
+            ) : null;
           })}
         </div>
-      </section>
-
-      <section className="grid gap-6 lg:grid-cols-[1fr_0.72fr]">
-        <div className="space-y-4">
-          <SectionHeader title={t("list.replies")} />
-          {listComments.map((comment) => (
-            <SignalPost key={comment.id} comment={comment} />
-          ))}
-        </div>
-        <Card className="h-fit p-5">
-          <div className="text-lg font-semibold text-white">{t("cta.futureSwap")}</div>
-          <p className="mt-3 text-sm leading-7 text-white/58">{t("cta.futureSwapText")}</p>
+      </GamePanel>
+      <div className="grid gap-5 lg:grid-cols-[1fr_0.8fr]">
+        <GamePanel className="p-5">
+          <PanelTitle title={t("list.replies")} />
+          <div className="mt-4 space-y-2">
+            {listComments.map((comment) => (
+              <SignalRow key={comment.id} comment={comment} />
+            ))}
+          </div>
+        </GamePanel>
+        <GamePanel className="p-5">
+          <PanelTitle title={t("cta.futureSwap")} />
+          <p className="mt-4 text-sm leading-6 text-slate-400">{t("cta.futureSwapText")}</p>
           <button
-            type="button"
             disabled
-            className="mt-5 rounded-full border border-white/10 bg-white/[0.04] px-4 py-2 text-sm font-semibold text-white/42"
+            className="mt-5 rounded-xl border border-blue-400/30 bg-blue-500/10 px-4 py-3 text-sm font-black text-blue-200"
           >
             {t("cta.futureSwap")}
           </button>
-        </Card>
-      </section>
+        </GamePanel>
+      </div>
     </div>
   );
 }
@@ -870,98 +1033,77 @@ export function TokenDetailView({ address }: { address: string }) {
 
   const tokenComments = getCommentsForToken(token.address);
   const relatedWatchlists = getWatchlistsForToken(token.address);
-  const relatedEntries = relatedWatchlists.flatMap((watchlist) =>
-    watchlist.entries.filter(
-      (entry) => entry.tokenAddress.toLowerCase() === token.address.toLowerCase(),
-    ),
-  );
   const score = calculateMergenWatchScore(token, tokenComments);
-  const communityStance = dominantStance(token);
+  const stance = dominantTokenStance(token);
   const topWatchers = relatedWatchlists
     .map((watchlist) => getUserByAddress(watchlist.ownerAddress))
     .filter((user): user is UserProfile => Boolean(user));
 
   return (
-    <div className="space-y-8">
-      <Link href="/watch" className="text-sm text-white/52 transition hover:text-white">
+    <div className="space-y-5">
+      <Link href="/watch" className="text-sm font-black text-blue-300 hover:text-white">
         {t("nav.back")}
       </Link>
-
-      <Card className="p-6 md:p-8">
-        <div className="grid gap-8 lg:grid-cols-[1fr_0.75fr]">
+      <GamePanel className="p-6">
+        <div className="grid gap-6 lg:grid-cols-[0.55fr_1fr_0.8fr]">
+          <TokenCharacterCard token={token} index={1} compact />
           <div>
-            <div className="flex flex-wrap items-center gap-3">
-              <StanceChip stance={communityStance} />
-              <span className="text-sm text-white/42">{t("token.communityStance")}</span>
-            </div>
-            <h1 className="mt-5 text-5xl font-semibold tracking-tight text-white md:text-7xl">
-              {token.symbol}
-            </h1>
-            <div className="mt-2 text-xl text-white/58">{token.name}</div>
-            <p className="mt-5 max-w-3xl text-base leading-8 text-white/64">
-              {token.summary}
-            </p>
+            <StanceBadge stance={stance} />
+            <h1 className="mt-4 text-6xl font-black text-white">{token.symbol}</h1>
+            <div className="mt-2 text-xl text-slate-400">{token.name}</div>
+            <p className="mt-5 max-w-2xl text-slate-400">{token.summary}</p>
           </div>
-          <div className="grid grid-cols-2 gap-5">
-            <Metric label={t("metric.watchScore")} value={score.toString()} tone="blue" />
-            <Metric label={t("metric.price")} value={formatUsd(token.price)} />
-            <Metric label="7D" value={formatPercent(token.change7d)} tone={token.change7d >= 0 ? "green" : "rose"} />
-            <Metric label={t("metric.liquidity")} value={`$${formatCompact(token.liquidityUsd)}`} tone="amber" />
-            <Metric label={t("metric.mentions")} value={formatCompact(token.mentions)} />
-            <Metric label={t("metric.holders")} value={formatCompact(token.holders)} />
+          <div className="grid grid-cols-2 gap-4">
+            <MiniMetric label={t("metric.watchScore")} value={score.toString()} />
+            <MiniMetric label={t("metric.performance")} value={formatPercent(token.change7d)} />
+            <MiniMetric label={t("metric.liquidity")} value={`$${formatCompact(token.liquidityUsd)}`} />
+            <MiniMetric label={t("metric.mentions")} value={formatCompact(token.mentions)} />
+            <MiniMetric label={t("metric.holders")} value={formatCompact(token.holders)} />
+            <MiniMetric label={t("metric.price")} value={formatUsd(token.price)} />
           </div>
         </div>
-      </Card>
-
-      <div className="grid gap-6 xl:grid-cols-[0.85fr_1.15fr_0.75fr]">
-        <aside className="space-y-4">
-          <SectionHeader title={t("token.topWatchers")} />
-          {topWatchers.map((user, index) => (
-            <WatcherRow key={user.address} user={user} rank={index + 1} />
-          ))}
-
-          <Card className="p-5">
-            <div className="text-lg font-semibold text-white">{t("token.safety")}</div>
-            <p className="mt-3 text-sm leading-7 text-white/58">{t("token.safetyText")}</p>
-          </Card>
-        </aside>
-
-        <section className="space-y-4">
-          <SectionHeader title={t("token.recentSignals")}>{t("token.subtitle")}</SectionHeader>
-          {tokenComments.length > 0 ? (
-            tokenComments.map((comment) => <SignalPost key={comment.id} comment={comment} />)
-          ) : (
-            <Card className="p-5 text-white/50">{t("label.empty")}</Card>
-          )}
-        </section>
-
-        <aside className="space-y-4">
-          <SectionHeader title={t("token.relatedLists")} />
-          {relatedWatchlists.map((watchlist) => {
-            const entry = relatedEntries.find(
-              (item) =>
-                item.tokenAddress.toLowerCase() === token.address.toLowerCase() &&
-                watchlist.entries.includes(item),
-            );
-
-            return (
-              <Card key={watchlist.id} className="p-4">
-                <Link
-                  href={`/watch/list/${watchlist.id}`}
-                  className="font-semibold text-white transition hover:text-sky-100"
-                >
-                  {watchlist.title}
-                </Link>
-                <div className="mt-3 flex flex-wrap items-center gap-2">
-                  {entry ? <StanceChip stance={entry.stance} /> : null}
-                  <span className="text-xs text-white/42">
-                    {formatCompact(watchlist.followers)} {t("metric.followers")}
-                  </span>
+      </GamePanel>
+      <div className="grid gap-5 xl:grid-cols-[0.8fr_1.2fr_0.85fr]">
+        <GamePanel className="p-5">
+          <PanelTitle title={t("token.watchers")} />
+          <div className="mt-4 space-y-2">
+            {topWatchers.map((user, index) => (
+              <div key={user.address} className="rounded-xl border border-white/8 bg-black/24 p-3">
+                <div className="flex items-center gap-3">
+                  <PixelAvatar label={user.avatar} tone="green" size="sm" />
+                  <div>
+                    <Link href={`/watch/profile/${user.address}`} className="font-black text-white hover:text-blue-200">
+                      @{user.handle}
+                    </Link>
+                    <div className="text-xs text-slate-500">#{index + 1} {t("metric.rank")}</div>
+                  </div>
                 </div>
-              </Card>
-            );
-          })}
-        </aside>
+              </div>
+            ))}
+          </div>
+        </GamePanel>
+        <GamePanel className="p-5">
+          <PanelTitle title={t("token.related")} />
+          <div className="mt-4 grid gap-3 md:grid-cols-2">
+            {relatedWatchlists.map((watchlist) => (
+              <WatchlistLeagueCard key={watchlist.id} watchlist={watchlist} />
+            ))}
+          </div>
+        </GamePanel>
+        <div className="space-y-5">
+          <GamePanel className="p-5">
+            <PanelTitle title={t("section.signals")} />
+            <div className="mt-4 space-y-2">
+              {tokenComments.map((comment) => (
+                <SignalRow key={comment.id} comment={comment} />
+              ))}
+            </div>
+          </GamePanel>
+          <GamePanel className="p-5">
+            <PanelTitle title={t("token.safety")} />
+            <p className="mt-4 text-sm leading-6 text-slate-400">{t("token.safetyText")}</p>
+          </GamePanel>
+        </div>
       </div>
     </div>
   );
