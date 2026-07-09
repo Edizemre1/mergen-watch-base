@@ -539,7 +539,12 @@ function SquadGameCard({
   const performance = entry ? getEntryReturnPct(entry) : token.change7d;
   const stance = mapStance(entry?.stance ?? (token.change7d > 0 ? "Bullish" : "Neutral"));
   const tone = tokenTones[token.symbol] ?? "blue";
-  const isLongSymbol = token.symbol.length > 6;
+  const symbolSizeClass =
+    token.symbol.length >= 7
+      ? "text-base sm:text-xl xl:text-base 2xl:text-xl"
+      : token.symbol.length >= 5
+        ? "text-xl sm:text-2xl xl:text-xl 2xl:text-2xl"
+        : "text-3xl";
 
   return (
     <Link
@@ -555,22 +560,26 @@ function SquadGameCard({
           <div
             className={cx(
               "truncate font-black leading-none text-white",
-              isLongSymbol ? "text-[1.35rem] sm:text-2xl xl:text-[1.45rem]" : "text-3xl",
+              symbolSizeClass,
             )}
           >
             {token.symbol}
           </div>
-          <div className="mt-1 truncate text-sm font-semibold text-slate-200">
-            {token.name}
-            <span className="text-slate-400"> / {token.sector}</span>
+          <div className="mt-1 min-w-0 space-y-0.5">
+            <div className="truncate text-sm font-bold leading-4 text-slate-100">
+              {token.name}
+            </div>
+            <div className="truncate text-xs font-semibold leading-4 text-slate-400">
+              {token.sector}
+            </div>
           </div>
         </div>
         <StanceBadge stance={stance} />
       </div>
-      <div className="relative z-10 mt-3">
+      <div className="relative z-10 mt-2.5">
         <XpBar value={xp} max={1800} />
       </div>
-      <div className="relative z-10 mt-auto grid grid-cols-2 gap-2.5 pt-3">
+      <div className="relative z-10 mt-2.5 grid grid-cols-2 gap-2.5">
         <div className="rounded-xl border border-blue-100/14 bg-slate-800/52 p-2.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]">
           <MiniMetric
             label={t("metric.performance")}
@@ -612,13 +621,13 @@ function WeeklySeasonPanel() {
   const { weeklyXp, weeklyPoints } = getSquadTotals();
 
   return (
-    <aside className="flex min-h-full flex-col rounded-2xl border border-blue-300/16 bg-slate-950/76 p-4 shadow-[0_18px_50px_rgba(0,0,0,0.28)]">
+    <aside className="flex min-h-full flex-col rounded-2xl border border-blue-300/20 bg-slate-900/66 p-4 shadow-[0_18px_50px_rgba(0,0,0,0.28),inset_0_1px_0_rgba(255,255,255,0.05)]">
       <PanelTitle title={t("section.weeklySeason")} />
-      <div className="mt-4 rounded-xl border border-white/10 bg-black/28 px-3 py-3">
+      <div className="mt-4 rounded-xl border border-white/12 bg-slate-900/50 px-3 py-3">
         <div className="text-sm font-black text-white">{t("season.name")}</div>
         <div className="mt-1 text-xs font-bold text-blue-300">{t("season.ends")}</div>
       </div>
-      <div className="mt-4 rounded-2xl border border-blue-300/14 bg-blue-500/10 p-4">
+      <div className="mt-4 rounded-2xl border border-blue-300/18 bg-blue-500/14 p-4">
         <div className="text-xs font-black uppercase tracking-wide text-slate-400">
           {t("season.rank")}
         </div>
@@ -626,16 +635,16 @@ function WeeklySeasonPanel() {
         <div className="mt-1 font-black text-blue-300">{t("season.top")}</div>
       </div>
       <div className="mt-4 grid gap-3">
-        <div className="rounded-xl border border-white/10 bg-black/24 p-3">
+        <div className="rounded-xl border border-white/12 bg-slate-900/48 p-3">
           <MiniMetric label={t("season.weeklyXp")} value={formatPoints(weeklyXp)} />
         </div>
-        <div className="rounded-xl border border-white/10 bg-black/24 p-3">
+        <div className="rounded-xl border border-white/12 bg-slate-900/48 p-3">
           <MiniMetric label={t("season.weeklyPoints")} value={formatPoints(weeklyPoints)} />
         </div>
       </div>
       <div className="mt-auto pt-5">
         <div className="mb-2 flex items-center justify-between text-xs">
-          <span className="font-black uppercase tracking-wide text-slate-500">{t("season.rewards")}</span>
+          <span className="font-black uppercase tracking-wide text-slate-400">{t("season.rewards")}</span>
           <span className="font-black text-lime-300">84%</span>
         </div>
         <XpBar value={weeklyPoints} max={15000} />
@@ -649,25 +658,25 @@ function WeeklyScorePanel() {
   const { weeklyXp, weeklyPoints } = getSquadTotals();
 
   return (
-    <aside className="flex min-h-full flex-col gap-4 rounded-2xl border border-blue-300/16 bg-slate-950/76 p-4 shadow-[0_18px_50px_rgba(0,0,0,0.28)]">
+    <aside className="flex min-h-full flex-col gap-4 rounded-2xl border border-blue-300/20 bg-slate-900/66 p-4 shadow-[0_18px_50px_rgba(0,0,0,0.28),inset_0_1px_0_rgba(255,255,255,0.05)]">
       <div>
         <PanelTitle title={t("score.title")} />
         <div className="mt-4 grid grid-cols-2 gap-3">
-          <div className="rounded-xl border border-white/10 bg-black/24 p-3">
+          <div className="rounded-xl border border-white/12 bg-slate-900/48 p-3">
             <MiniMetric label={t("metric.xp")} value={formatPoints(weeklyXp)} />
           </div>
-          <div className="rounded-xl border border-white/10 bg-black/24 p-3">
+          <div className="rounded-xl border border-white/12 bg-slate-900/48 p-3">
             <MiniMetric label={t("metric.points")} value={formatPoints(weeklyPoints)} />
           </div>
         </div>
       </div>
-      <div className="rounded-2xl border border-white/10 bg-black/24 p-3">
-        <div className="mb-3 text-xs font-black uppercase tracking-wide text-slate-500">
+      <div className="rounded-2xl border border-white/12 bg-slate-900/48 p-3">
+        <div className="mb-3 text-xs font-black uppercase tracking-wide text-slate-400">
           {t("section.leaderboard")}
         </div>
         <div className="space-y-2">
           {leaderboard.map((row, index) => (
-            <div key={row.handle} className="flex items-center gap-2 rounded-xl border border-white/8 bg-slate-950/60 p-2">
+            <div key={row.handle} className="flex items-center gap-2 rounded-xl border border-white/10 bg-slate-900/64 p-2">
               <div className="w-5 text-center text-xs font-black text-amber-200">{index + 1}</div>
               <PixelAvatar label={row.avatar} tone={index % 2 === 0 ? "blue" : "violet"} size="sm" />
               <div className="min-w-0 flex-1 truncate text-xs font-black text-white">{row.handle}</div>
@@ -681,7 +690,7 @@ function WeeklyScorePanel() {
           <PixelAvatar label="BH" tone="green" selected />
           <div className="min-w-0">
             <div className="font-black text-white">{t("profile.handle")}</div>
-            <div className="text-xs text-slate-400">{t("profile.role")}</div>
+            <div className="text-xs text-slate-300">{t("profile.role")}</div>
           </div>
         </div>
       </div>
