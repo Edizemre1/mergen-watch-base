@@ -1,5 +1,6 @@
 "use client";
 
+import { useMemo, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { LanguageToggle, type CopyKey, useLanguage } from "@/components/language";
@@ -34,10 +35,35 @@ import type { Comment, Stance, Token, UserProfile, Watchlist, WatchlistEntry } f
 
 type LeagueStance = "Bullish" | "Watching" | "Risky" | "Avoid";
 type ArtTone = "blue" | "violet" | "cyan" | "green" | "gold" | "rose";
+type SquadSlot = { token: Token; entry?: WatchlistEntry } | null;
 
 const githubUrl = "https://github.com/Edizemre1/mergen-watch-base";
 const playerRank = 256;
 const maxSquadSlots = 5;
+const defaultSquadSlotSymbols = ["DEGEN", "BRETT", "TOSHI", null, null] as const;
+const squadSelectionSymbols = [
+  "CAW",
+  "DOGINME",
+  "PONKE",
+  "BALD",
+  "KEYCAT",
+  "MIGGLES",
+  "SKI",
+  "DRB",
+  "TOBY",
+  "KIBSHI",
+  "BENJI",
+  "BASED PEPE",
+  "BASE GOD",
+  "BORED",
+  "NOICE",
+  "SHIB ON BASE",
+  "DINO",
+  "PING",
+  "HIGHER",
+  "RUSSELL",
+  "MEOW",
+] as const;
 
 const tokenTones: Record<string, ArtTone> = {
   AERO: "blue",
@@ -49,7 +75,92 @@ const tokenTones: Record<string, ArtTone> = {
   VIRTUAL: "gold",
   HIGHER: "rose",
   KEYCAT: "blue",
+  PONKE: "gold",
+  BALD: "blue",
+  MIGGLES: "cyan",
+  SKI: "blue",
+  DRB: "violet",
+  TOBY: "green",
+  KIBSHI: "rose",
+  BENJI: "gold",
+  "BASED PEPE": "green",
+  "BASE GOD": "blue",
+  BORED: "violet",
+  NOICE: "cyan",
+  "SHIB ON BASE": "rose",
+  DINO: "gold",
+  PING: "cyan",
+  RUSSELL: "green",
+  MEOW: "violet",
 };
+
+function createSelectionToken(
+  symbol: string,
+  name: string,
+  sector: string,
+  index: number,
+  change7d: number,
+  socialVelocity: number,
+): Token {
+  return {
+    address: `0x${(0xe00 + index).toString(16).padStart(40, "0")}`,
+    symbol,
+    name,
+    sector,
+    chain: "Base",
+    summary: `${name} is a mock Mergen Watch League fighter card for weekly Base squad play.`,
+    price: Number((0.0004 + index * 0.0017).toPrecision(3)),
+    change24h: Number((change7d / 3).toFixed(1)),
+    change7d,
+    liquidityUsd: 4_800_000 + index * 1_450_000,
+    holders: 18_000 + index * 6_200,
+    socialVelocity,
+    contractRisk: 34 + (index % 5) * 5,
+    volatility: 58 + (index % 6) * 4,
+    mentions: 2_400 + index * 620,
+    followers: 9_000 + index * 3_900,
+    watchScoreInputs: {
+      communityConviction: 62 + (index % 7) * 4,
+      researchDepth: 38 + (index % 6) * 5,
+      liquidityConfidence: 44 + (index % 5) * 5,
+      riskControl: 39 + (index % 5) * 4,
+      momentum: 58 + (index % 7) * 4,
+    },
+  };
+}
+
+const selectionOnlyTokens: Token[] = [
+  createSelectionToken("PONKE", "Ponke", "Base meme", 1, 9.4, 70),
+  createSelectionToken("BALD", "Bald", "Base culture", 2, -2.8, 58),
+  createSelectionToken("MIGGLES", "Mister Miggles", "Base culture", 3, 13.7, 74),
+  createSelectionToken("SKI", "Ski Mask Dog", "Meme liquidity", 4, 7.9, 63),
+  createSelectionToken("DRB", "Degen Rebels", "Social protocol", 5, 5.1, 61),
+  createSelectionToken("TOBY", "Toby", "Base social", 6, 10.6, 68),
+  createSelectionToken("KIBSHI", "Kibshi", "Base meme", 7, -4.2, 55),
+  createSelectionToken("BENJI", "Benji", "Base culture", 8, 6.8, 64),
+  createSelectionToken("BASED PEPE", "Based Pepe", "Base meme", 9, 15.5, 79),
+  createSelectionToken("BASE GOD", "Base God", "Base culture", 10, 19.8, 84),
+  createSelectionToken("BORED", "Bored", "NFT culture", 11, 3.6, 59),
+  createSelectionToken("NOICE", "Noice", "Base social", 12, 8.8, 66),
+  createSelectionToken("SHIB ON BASE", "Shib On Base", "Base meme", 13, 11.2, 72),
+  createSelectionToken("DINO", "Dino", "Base meme", 14, -1.9, 53),
+  createSelectionToken("PING", "Ping", "Base social", 15, 4.5, 60),
+  createSelectionToken("RUSSELL", "Russell", "Base culture", 16, 12.1, 71),
+  createSelectionToken("MEOW", "Meow", "Meme liquidity", 17, 6.2, 65),
+];
+
+const squadTokenPool = [...baseTokens, ...selectionOnlyTokens];
+
+function getSquadTokenBySymbol(symbol: string) {
+  return squadTokenPool.find(
+    (token) => token.symbol.toLowerCase() === symbol.toLowerCase(),
+  );
+}
+
+const squadSelectionTokens = squadSelectionSymbols.flatMap((symbol) => {
+  const token = getSquadTokenBySymbol(symbol);
+  return token ? [token] : [];
+});
 
 const leaderboard = [
   { handle: "@defi_king", avatar: "DK", points: 15240 },
@@ -114,32 +225,33 @@ function getTokenLevel(token: Token, index = 0) {
   return Math.max(8, Math.round(10 + token.watchScoreInputs.researchDepth / 12 + index));
 }
 
-function getSquadBuilderEntries(): Array<{ token: Token; entry?: WatchlistEntry }> {
-  const preferredSymbols = ["DEGEN", "BRETT", "TOSHI", "CAW", "DOGINME"];
+function getEntryForToken(token: Token) {
   const allEntries = watchlists.flatMap((watchlist) => watchlist.entries);
 
-  return preferredSymbols.flatMap((symbol) => {
-    const token = baseTokens.find((baseToken) => baseToken.symbol === symbol);
+  return allEntries.find(
+    (watchlistEntry) =>
+      watchlistEntry.tokenAddress.toLowerCase() === token.address.toLowerCase(),
+  );
+}
 
-    if (!token) {
-      return [];
+function getSquadSlots(symbols: readonly (string | null)[]): SquadSlot[] {
+  return symbols.map((symbol) => {
+    if (!symbol) {
+      return null;
     }
 
-    const entry = allEntries.find(
-      (watchlistEntry) =>
-        watchlistEntry.tokenAddress.toLowerCase() === token.address.toLowerCase(),
-    );
+    const token = getSquadTokenBySymbol(symbol);
 
-    return [{ token, entry }];
+    return token ? { token, entry: getEntryForToken(token) } : null;
   });
 }
 
-function getSquadTotals() {
-  const squad = getSquadBuilderEntries();
+function getSquadTotals(squad: SquadSlot[] = getSquadSlots(defaultSquadSlotSymbols)) {
+  const filledSquad = squad.filter((slot): slot is NonNullable<SquadSlot> => Boolean(slot));
 
   return {
-    weeklyXp: squad.reduce((sum, item, index) => sum + getTokenXp(item.token, index), 0),
-    weeklyPoints: squad.reduce(
+    weeklyXp: filledSquad.reduce((sum, item, index) => sum + getTokenXp(item.token, index), 0),
+    weeklyPoints: filledSquad.reduce(
       (sum, item) => sum + getTokenPoints(item.token, item.entry),
       0,
     ),
@@ -527,10 +639,12 @@ function SquadGameCard({
   token,
   entry,
   index,
+  onRemove,
 }: {
   token: Token;
   entry?: WatchlistEntry;
   index: number;
+  onRemove?: () => void;
 }) {
   const { t } = useLanguage();
   const xp = getTokenXp(token, index);
@@ -546,13 +660,21 @@ function SquadGameCard({
         : "text-2xl";
 
   return (
-    <Link
-      href={`/watch/token/${token.address}`}
+    <article
       className="group relative flex min-h-[366px] flex-col overflow-hidden rounded-2xl border border-blue-300/35 bg-gradient-to-b from-slate-900/92 via-slate-950/84 to-slate-950/90 p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.08),inset_0_-18px_38px_rgba(15,23,42,0.22),0_18px_44px_rgba(0,0,0,0.28)] transition-all duration-300 ease-out hover:-translate-y-1 hover:border-lime-300/55 hover:shadow-[inset_0_1px_0_rgba(255,255,255,0.12),inset_0_-18px_38px_rgba(15,23,42,0.16),0_22px_58px_rgba(37,99,235,0.22)]"
     >
       <span className="pointer-events-none absolute inset-x-3 top-2 h-px bg-gradient-to-r from-transparent via-white/35 to-transparent" />
       <span className="pointer-events-none absolute -right-10 -top-10 h-28 w-28 rounded-full bg-blue-400/14 blur-3xl transition duration-300 group-hover:bg-lime-300/14" />
       <span className="pointer-events-none absolute -left-12 bottom-16 h-24 w-24 rounded-full bg-violet-400/8 blur-3xl" />
+      {onRemove ? (
+        <button
+          type="button"
+          onClick={onRemove}
+          className="absolute right-5 top-5 z-20 rounded-lg border border-white/12 bg-black/45 px-2 py-1 text-[10px] font-black uppercase text-slate-200 opacity-80 backdrop-blur transition hover:border-rose-300/40 hover:bg-rose-400/15 hover:text-white hover:opacity-100"
+        >
+          {t("squad.remove")}
+        </button>
+      ) : null}
       <CharacterPlaceholder token={token} tone={tone} className="relative z-10" />
       <div className="relative z-10 mt-3 min-w-0">
         <div className={cx("whitespace-nowrap font-black leading-none text-white", symbolSizeClass)}>
@@ -588,31 +710,36 @@ function SquadGameCard({
           <MiniMetric label={t("metric.points")} value={formatPoints(points)} valueClassName="text-lime-100" />
         </div>
       </div>
-    </Link>
+    </article>
   );
 }
 
-function AddGameCard({ index }: { index: number }) {
+function AddGameCard({ index, onClick }: { index: number; onClick: () => void }) {
   const { t } = useLanguage();
 
   return (
-    <div className="grid min-h-[366px] place-items-center rounded-2xl border border-dashed border-lime-300/35 bg-slate-950/58 p-4 text-center transition-all duration-300 ease-out hover:-translate-y-1 hover:border-lime-300/55 hover:shadow-[0_20px_48px_rgba(132,204,22,0.12)]">
+    <button
+      type="button"
+      onClick={onClick}
+      className="group grid min-h-[366px] w-full place-items-center rounded-2xl border border-dashed border-lime-300/35 bg-slate-950/58 p-4 text-center transition-all duration-300 ease-out hover:-translate-y-1 hover:border-lime-300/60 hover:bg-slate-900/72 hover:shadow-[0_20px_48px_rgba(132,204,22,0.14)]"
+    >
       <div>
-        <div className="mx-auto grid size-24 place-items-center rounded-full border border-lime-300/35 bg-lime-300/8 text-6xl font-light text-lime-300">
+        <div className="mx-auto grid size-24 place-items-center rounded-2xl border border-lime-300/35 bg-lime-300/8 text-6xl font-light text-lime-300 transition group-hover:scale-105 group-hover:bg-lime-300/12">
           +
         </div>
         <div className="mt-6 text-2xl font-black text-lime-300">{t("squad.add")}</div>
+        <div className="mt-2 text-xs font-semibold text-slate-300">{t("squad.addText")}</div>
         <div className="mt-4 rounded-xl border border-blue-300/15 bg-black/30 px-3 py-2 text-xs font-black uppercase tracking-wide text-blue-200">
           {index + 1} / {maxSquadSlots} {t("squad.slots")}
         </div>
       </div>
-    </div>
+    </button>
   );
 }
 
-function WeeklySeasonPanel() {
+function WeeklySeasonPanel({ totals }: { totals: ReturnType<typeof getSquadTotals> }) {
   const { t } = useLanguage();
-  const { weeklyXp, weeklyPoints } = getSquadTotals();
+  const { weeklyXp, weeklyPoints } = totals;
 
   return (
     <aside className="flex min-h-full flex-col rounded-2xl border border-blue-300/20 bg-slate-900/66 p-4 shadow-[0_18px_50px_rgba(0,0,0,0.28),inset_0_1px_0_rgba(255,255,255,0.05)]">
@@ -647,9 +774,9 @@ function WeeklySeasonPanel() {
   );
 }
 
-function WeeklyScorePanel() {
+function WeeklyScorePanel({ totals }: { totals: ReturnType<typeof getSquadTotals> }) {
   const { t } = useLanguage();
-  const { weeklyXp, weeklyPoints } = getSquadTotals();
+  const { weeklyXp, weeklyPoints } = totals;
 
   return (
     <aside className="flex min-h-full flex-col gap-4 rounded-2xl border border-blue-300/20 bg-slate-900/66 p-4 shadow-[0_18px_50px_rgba(0,0,0,0.28),inset_0_1px_0_rgba(255,255,255,0.05)]">
@@ -692,13 +819,104 @@ function WeeklyScorePanel() {
   );
 }
 
-function SquadBuilderExperience() {
+function TokenSelectionModal({
+  tokens,
+  onClose,
+  onSelect,
+}: {
+  tokens: Token[];
+  onClose: () => void;
+  onSelect: (token: Token) => void;
+}) {
   const { t } = useLanguage();
-  const squad = getSquadBuilderEntries();
-  const emptySlots = Array.from(
-    { length: Math.max(0, maxSquadSlots - squad.length) },
-    (_, slotIndex) => squad.length + slotIndex,
+
+  return (
+    <div className="fixed inset-0 z-50 grid place-items-center bg-black/70 px-4 py-6 backdrop-blur-md">
+      <div className="relative max-h-[88vh] w-full max-w-6xl overflow-hidden rounded-2xl border border-blue-300/30 bg-slate-950/96 shadow-[0_0_60px_rgba(37,99,235,0.24)]">
+        <span className="pointer-events-none absolute left-10 top-10 h-44 w-44 rounded-full bg-blue-500/14 blur-3xl" />
+        <span className="pointer-events-none absolute bottom-8 right-12 h-44 w-44 rounded-full bg-lime-300/10 blur-3xl" />
+        <div className="relative z-10 flex items-start justify-between gap-4 border-b border-white/10 p-5">
+          <div>
+            <h2 className="text-3xl font-black text-white">{t("squad.chooseTitle")}</h2>
+            <p className="mt-2 text-sm font-semibold text-slate-300">{t("squad.chooseSubtitle")}</p>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="grid size-10 shrink-0 place-items-center rounded-xl border border-white/12 bg-white/6 text-xl font-black text-slate-200 transition hover:border-blue-300/40 hover:text-white"
+            aria-label="Close"
+          >
+            ×
+          </button>
+        </div>
+        <div className="relative z-10 max-h-[68vh] overflow-y-auto p-5">
+          {tokens.length > 0 ? (
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5">
+              {tokens.map((token, index) => {
+                const tone = tokenTones[token.symbol] ?? "blue";
+                const stance = mapStance(token.change7d > 10 ? "Bullish" : token.change7d < 0 ? "Risky" : "Neutral");
+
+                return (
+                  <button
+                    key={token.address}
+                    type="button"
+                    onClick={() => onSelect(token)}
+                    className="group overflow-hidden rounded-2xl border border-blue-300/20 bg-gradient-to-b from-slate-900/86 to-slate-950/92 p-2 text-left shadow-[0_16px_38px_rgba(0,0,0,0.28)] transition hover:-translate-y-1 hover:border-lime-300/50 hover:shadow-[0_20px_46px_rgba(37,99,235,0.18)]"
+                  >
+                    <CharacterPlaceholder token={token} tone={tone} className="h-40 rounded-xl" />
+                    <div className="mt-3 flex items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <div className="truncate text-lg font-black text-white">{token.symbol}</div>
+                        <div className="truncate text-xs font-semibold text-slate-400">{token.name}</div>
+                      </div>
+                      <StanceBadge stance={stance} />
+                    </div>
+                    <div className="mt-3 grid grid-cols-2 gap-2">
+                      <MiniMetric label={t("metric.xp")} value={getTokenXp(token, index).toString()} />
+                      <MiniMetric label={t("metric.performance")} value={formatPercent(token.change7d)} />
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          ) : (
+            <div className="rounded-2xl border border-lime-300/20 bg-lime-300/8 p-8 text-center text-xl font-black text-lime-200">
+              {t("squad.full")}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
   );
+}
+
+function SquadBuilderExperience({
+  squadSlots,
+  onSelectToken,
+  onRemoveToken,
+}: {
+  squadSlots: SquadSlot[];
+  onSelectToken: (slotIndex: number, token: Token) => void;
+  onRemoveToken: (slotIndex: number) => void;
+}) {
+  const { t } = useLanguage();
+  const [activeSlotIndex, setActiveSlotIndex] = useState<number | null>(null);
+  const filledSlotCount = squadSlots.filter(Boolean).length;
+  const selectedSymbols = new Set(
+    squadSlots.flatMap((slot) => (slot ? [slot.token.symbol] : [])),
+  );
+  const availableTokens = squadSelectionTokens.filter(
+    (token) => !selectedSymbols.has(token.symbol),
+  );
+
+  function handleSelectToken(token: Token) {
+    if (activeSlotIndex === null) {
+      return;
+    }
+
+    onSelectToken(activeSlotIndex, token);
+    setActiveSlotIndex(null);
+  }
 
   return (
     <section className="relative flex min-h-full flex-col overflow-hidden rounded-2xl border border-blue-300/24 bg-slate-900/66 p-4 shadow-[0_18px_55px_rgba(0,0,0,0.3),0_0_38px_rgba(37,99,235,0.16),inset_0_1px_0_rgba(255,255,255,0.08)]">
@@ -716,28 +934,76 @@ function SquadBuilderExperience() {
             {t("hero.subtitle")}
           </p>
         </div>
-        <div className="rounded-2xl border border-lime-300/20 bg-lime-300/8 px-4 py-3 text-sm font-black text-lime-200">
-          {squad.length} / {maxSquadSlots} {t("squad.slots").toUpperCase()}
+        <div
+          className="rounded-2xl border border-lime-300/20 bg-lime-300/8 px-4 py-3 text-sm font-black text-lime-200"
+          title={filledSlotCount === maxSquadSlots ? t("squad.full") : undefined}
+        >
+          {filledSlotCount} / {maxSquadSlots} {t("squad.slots").toUpperCase()}
         </div>
       </div>
       <div className="relative z-10 mt-5 grid flex-1 gap-4 sm:grid-cols-2 xl:grid-cols-5">
-        {squad.map(({ token, entry }, index) => (
-          <SquadGameCard key={token.address} token={token} entry={entry} index={index} />
-        ))}
-        {emptySlots.map((slotIndex) => (
-          <AddGameCard key={slotIndex} index={slotIndex} />
+        {squadSlots.map((slot, index) => (
+          slot ? (
+            <SquadGameCard
+              key={`${index}-${slot.token.address}`}
+              token={slot.token}
+              entry={slot.entry}
+              index={index}
+              onRemove={() => onRemoveToken(index)}
+            />
+          ) : (
+            <AddGameCard
+              key={`empty-${index}`}
+              index={index}
+              onClick={() => setActiveSlotIndex(index)}
+            />
+          )
         ))}
       </div>
+      {activeSlotIndex !== null ? (
+        <TokenSelectionModal
+          tokens={availableTokens}
+          onClose={() => setActiveSlotIndex(null)}
+          onSelect={handleSelectToken}
+        />
+      ) : null}
     </section>
   );
 }
 
 function GameLobbyScreen() {
+  const [squadSlots, setSquadSlots] = useState<SquadSlot[]>(() =>
+    getSquadSlots(defaultSquadSlotSymbols),
+  );
+  const totals = useMemo(() => getSquadTotals(squadSlots), [squadSlots]);
+
+  function handleSelectToken(slotIndex: number, token: Token) {
+    setSquadSlots((currentSlots) => {
+      if (currentSlots.some((slot) => slot?.token.symbol === token.symbol)) {
+        return currentSlots;
+      }
+
+      return currentSlots.map((slot, index) =>
+        index === slotIndex ? { token, entry: getEntryForToken(token) } : slot,
+      );
+    });
+  }
+
+  function handleRemoveToken(slotIndex: number) {
+    setSquadSlots((currentSlots) =>
+      currentSlots.map((slot, index) => (index === slotIndex ? null : slot)),
+    );
+  }
+
   return (
     <div className="grid gap-4 lg:min-h-[calc(100vh-96px)] xl:grid-cols-[250px_minmax(0,1fr)_290px]">
-      <WeeklySeasonPanel />
-      <SquadBuilderExperience />
-      <WeeklyScorePanel />
+      <WeeklySeasonPanel totals={totals} />
+      <SquadBuilderExperience
+        squadSlots={squadSlots}
+        onSelectToken={handleSelectToken}
+        onRemoveToken={handleRemoveToken}
+      />
+      <WeeklyScorePanel totals={totals} />
     </div>
   );
 }
