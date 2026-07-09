@@ -821,59 +821,99 @@ function WeeklyScorePanel({ totals }: { totals: ReturnType<typeof getSquadTotals
 
 function TokenSelectionModal({
   tokens,
+  selectedSymbols,
   onClose,
   onSelect,
 }: {
   tokens: Token[];
+  selectedSymbols: Set<string>;
   onClose: () => void;
   onSelect: (token: Token) => void;
 }) {
   const { t } = useLanguage();
+  const [searchTerm, setSearchTerm] = useState("");
+  const filteredTokens = useMemo(() => {
+    const query = searchTerm.trim().toLowerCase();
+
+    if (!query) {
+      return tokens;
+    }
+
+    return tokens.filter(
+      (token) =>
+        token.symbol.toLowerCase().includes(query) ||
+        token.name.toLowerCase().includes(query),
+    );
+  }, [searchTerm, tokens]);
 
   return (
-    <div className="fixed inset-0 z-50 grid place-items-center bg-black/70 px-4 py-6 backdrop-blur-md">
-      <div className="relative max-h-[88vh] w-full max-w-6xl overflow-hidden rounded-2xl border border-blue-300/30 bg-slate-950/96 shadow-[0_0_60px_rgba(37,99,235,0.24)]">
+    <div className="fixed inset-0 z-50 grid place-items-center bg-black/72 px-3 py-4 backdrop-blur-md sm:px-5 sm:py-6">
+      <div className="relative max-h-[92vh] w-full max-w-[1280px] overflow-hidden rounded-2xl border border-blue-300/32 bg-slate-950/96 shadow-[0_0_70px_rgba(37,99,235,0.28),inset_0_1px_0_rgba(255,255,255,0.08)]">
         <span className="pointer-events-none absolute left-10 top-10 h-44 w-44 rounded-full bg-blue-500/14 blur-3xl" />
         <span className="pointer-events-none absolute bottom-8 right-12 h-44 w-44 rounded-full bg-lime-300/10 blur-3xl" />
-        <div className="relative z-10 flex items-start justify-between gap-4 border-b border-white/10 p-5">
-          <div>
-            <h2 className="text-3xl font-black text-white">{t("squad.chooseTitle")}</h2>
-            <p className="mt-2 text-sm font-semibold text-slate-300">{t("squad.chooseSubtitle")}</p>
+        <div className="relative z-10 border-b border-white/10 p-4 sm:p-5">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <h2 className="text-2xl font-black text-white sm:text-3xl">{t("squad.chooseTitle")}</h2>
+              <p className="mt-2 text-sm font-semibold text-slate-300">{t("squad.chooseSubtitle")}</p>
+            </div>
+            <button
+              type="button"
+              onClick={onClose}
+              className="grid size-10 shrink-0 place-items-center rounded-xl border border-white/12 bg-white/6 text-sm font-black text-slate-200 transition hover:border-blue-300/40 hover:text-white"
+              aria-label="Close"
+            >
+              X
+            </button>
           </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="grid size-10 shrink-0 place-items-center rounded-xl border border-white/12 bg-white/6 text-xl font-black text-slate-200 transition hover:border-blue-300/40 hover:text-white"
-            aria-label="Close"
-          >
-            ×
-          </button>
+          <input
+            type="search"
+            value={searchTerm}
+            onChange={(event) => setSearchTerm(event.target.value)}
+            placeholder={t("squad.searchPlaceholder")}
+            className="mt-4 w-full rounded-xl border border-blue-300/18 bg-slate-900/78 px-4 py-3 text-sm font-bold text-white outline-none transition placeholder:text-slate-500 focus:border-lime-300/45 focus:shadow-[0_0_24px_rgba(132,204,22,0.12)]"
+          />
         </div>
-        <div className="relative z-10 max-h-[68vh] overflow-y-auto p-5">
-          {tokens.length > 0 ? (
+        <div className="relative z-10 max-h-[68vh] overflow-y-auto p-4 sm:p-5">
+          {filteredTokens.length > 0 ? (
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5">
-              {tokens.map((token, index) => {
+              {filteredTokens.map((token, index) => {
                 const tone = tokenTones[token.symbol] ?? "blue";
                 const stance = mapStance(token.change7d > 10 ? "Bullish" : token.change7d < 0 ? "Risky" : "Neutral");
+                const isInSquad = selectedSymbols.has(token.symbol);
 
                 return (
                   <button
                     key={token.address}
                     type="button"
+                    disabled={isInSquad}
                     onClick={() => onSelect(token)}
-                    className="group overflow-hidden rounded-2xl border border-blue-300/20 bg-gradient-to-b from-slate-900/86 to-slate-950/92 p-2 text-left shadow-[0_16px_38px_rgba(0,0,0,0.28)] transition hover:-translate-y-1 hover:border-lime-300/50 hover:shadow-[0_20px_46px_rgba(37,99,235,0.18)]"
+                    className={cx(
+                      "group overflow-hidden rounded-2xl border bg-gradient-to-b from-slate-900/86 to-slate-950/92 p-2 text-left shadow-[0_16px_38px_rgba(0,0,0,0.28)] transition",
+                      isInSquad
+                        ? "cursor-not-allowed border-white/10 opacity-45 grayscale"
+                        : "border-blue-300/20 hover:-translate-y-1 hover:border-lime-300/50 hover:shadow-[0_20px_46px_rgba(37,99,235,0.18)]",
+                    )}
                   >
-                    <CharacterPlaceholder token={token} tone={tone} className="h-40 rounded-xl" />
+                    <div className="relative">
+                      <CharacterPlaceholder token={token} tone={tone} className="h-44 rounded-xl" />
+                      {isInSquad ? (
+                        <div className="absolute left-3 top-3 rounded-lg border border-lime-300/35 bg-lime-300/16 px-2 py-1 text-[10px] font-black uppercase text-lime-100 backdrop-blur">
+                          {t("squad.inSquad")}
+                        </div>
+                      ) : null}
+                    </div>
                     <div className="mt-3 flex items-start justify-between gap-2">
                       <div className="min-w-0">
                         <div className="truncate text-lg font-black text-white">{token.symbol}</div>
-                        <div className="truncate text-xs font-semibold text-slate-400">{token.name}</div>
+                        <div className="truncate text-xs font-semibold text-slate-300">{token.sector}</div>
                       </div>
                       <StanceBadge stance={stance} />
                     </div>
-                    <div className="mt-3 grid grid-cols-2 gap-2">
-                      <MiniMetric label={t("metric.xp")} value={getTokenXp(token, index).toString()} />
+                    <div className="mt-1 truncate text-xs font-semibold text-slate-500">{token.name}</div>
+                    <div className="mt-3 grid grid-cols-2 gap-2 rounded-xl border border-white/10 bg-slate-900/52 p-2">
                       <MiniMetric label={t("metric.performance")} value={formatPercent(token.change7d)} />
+                      <MiniMetric label={t("metric.xp")} value={getTokenXp(token, index).toString()} />
                     </div>
                   </button>
                 );
@@ -881,7 +921,7 @@ function TokenSelectionModal({
             </div>
           ) : (
             <div className="rounded-2xl border border-lime-300/20 bg-lime-300/8 p-8 text-center text-xl font-black text-lime-200">
-              {t("squad.full")}
+              {t("squad.noResults")}
             </div>
           )}
         </div>
@@ -904,9 +944,6 @@ function SquadBuilderExperience({
   const filledSlotCount = squadSlots.filter(Boolean).length;
   const selectedSymbols = new Set(
     squadSlots.flatMap((slot) => (slot ? [slot.token.symbol] : [])),
-  );
-  const availableTokens = squadSelectionTokens.filter(
-    (token) => !selectedSymbols.has(token.symbol),
   );
 
   function handleSelectToken(token: Token) {
@@ -962,7 +999,8 @@ function SquadBuilderExperience({
       </div>
       {activeSlotIndex !== null ? (
         <TokenSelectionModal
-          tokens={availableTokens}
+          tokens={squadSelectionTokens}
+          selectedSymbols={selectedSymbols}
           onClose={() => setActiveSlotIndex(null)}
           onSelect={handleSelectToken}
         />
