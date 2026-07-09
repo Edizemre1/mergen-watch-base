@@ -447,7 +447,7 @@ function CharacterPlaceholder({
   return (
     <div
       className={cx(
-        "relative h-52 overflow-hidden rounded-2xl border border-white/16 bg-gradient-to-br shadow-[inset_0_1px_18px_rgba(255,255,255,0.1)]",
+        "relative h-52 overflow-hidden rounded-2xl bg-gradient-to-br shadow-[inset_0_1px_18px_rgba(255,255,255,0.1)]",
         toneGradient(tone),
         className,
       )}
@@ -541,9 +541,9 @@ function SquadGameCard({
   const tone = tokenTones[token.symbol] ?? "blue";
   const symbolSizeClass =
     token.symbol.length >= 7
-      ? "text-base sm:text-xl xl:text-base 2xl:text-xl"
+      ? "text-[0.95rem] sm:text-base lg:text-[0.95rem] xl:text-sm 2xl:text-base"
       : token.symbol.length >= 5
-        ? "text-xl sm:text-2xl xl:text-xl 2xl:text-2xl"
+        ? "text-lg sm:text-2xl xl:text-xl 2xl:text-2xl"
         : "text-3xl";
 
   return (
@@ -556,10 +556,10 @@ function SquadGameCard({
       <span className="pointer-events-none absolute -left-12 bottom-16 h-24 w-24 rounded-full bg-violet-400/8 blur-3xl" />
       <CharacterPlaceholder token={token} tone={tone} className="relative z-10" />
       <div className="relative z-10 mt-3 flex items-start justify-between gap-2.5">
-        <div className="min-w-0 flex-1">
+        <div className="min-w-0 max-w-[calc(100%-6.5rem)] flex-1">
           <div
             className={cx(
-              "truncate font-black leading-none text-white",
+              "font-black leading-none text-white tracking-tight break-words",
               symbolSizeClass,
             )}
           >
@@ -574,7 +574,9 @@ function SquadGameCard({
             </div>
           </div>
         </div>
-        <StanceBadge stance={stance} />
+        <div className="shrink-0 self-start">
+          <StanceBadge stance={stance} />
+        </div>
       </div>
       <div className="relative z-10 mt-2.5">
         <XpBar value={xp} max={1800} />
