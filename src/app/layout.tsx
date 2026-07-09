@@ -5,7 +5,7 @@ import "./globals.css";
 export const metadata: Metadata = {
   title: "Mergen Watch Base",
   description:
-    "A Base-native social watchlist and token performance demo powered by mock data.",
+    "A social squad and watchlist game prototype for Base token characters.",
 };
 
 export default function RootLayout({

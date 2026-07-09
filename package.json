@@ -1,6 +1,7 @@
 {
   "name": "mergen-watch-base",
   "version": "0.1.0",
+  "description": "Mergen Watch Base public demo — a Base-native social squad/watchlist game prototype.",
   "private": true,
   "scripts": {
     "dev": "next dev",

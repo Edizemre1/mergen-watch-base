@@ -1,50 +1,57 @@
 # Mergen Watch Base
 
-Mergen Watch Base is a standalone public demo for a Base-native weekly squad
-game called Mergen Watch League.
+Mergen Watch Base is a public demo and proof-of-build for **Mergen Watch League**: a Base-native social squad and watchlist game prototype.
 
-The product lets visitors build a weekly Base token squad, inspect collectible
-token character cards, follow mock performance scoring, earn XP and badges, and
-climb a weekly leaderboard. It still keeps the social watchlist DNA, but the v4
-direction is a browser-game-style product lobby rather than a crypto dashboard.
+Live demo: https://mergen-watch-base.vercel.app
+
+GitHub repo: https://github.com/Edizemre1/mergen-watch-base
+
+## What It Is
+
+Mergen Watch League turns Base token discovery into a simple browser-game loop:
+
+- Pick Base token characters.
+- Build a weekly squad.
+- Earn mock XP and points.
+- Climb a weekly leaderboard.
+- Create a mock watcher profile.
+
+The demo keeps the social watchlist idea from Mergen Watch, but presents it as a more playful product: collectible token cards, squad slots, seasonal scoring, and profile identity.
+
+## Current Demo Features
+
+- Mock squad builder with five token slots
+- Token add and remove flow
+- Persistent squad state with localStorage
+- Premium token character cards using existing assets
+- Mock wallet connect and disconnect flow
+- Wallet-keyed mock profile and avatar setup
+- Weekly XP, points, rank, and leaderboard panels
+- English and Turkish language toggle
+- Public Vercel deployment
+
+## What Is Mocked
+
+This is a frontend-only public demo. It intentionally does not include:
+
+- Real swaps
+- Real wallet transactions
+- Real wallet libraries
+- Onchain writes
+- Live token indexing
+- Financial advice
+- Production credentials, API keys, private keys, or seed phrases
+
+All tokens, scores, profiles, leaderboards, wallet state, comments, and performance numbers are mock data or local browser state.
 
 ## Why It Exists
 
-Base has a fast-moving token ecosystem where social context, liquidity quality,
-contract risk, and community conviction often move before polished research
-does. Mergen Watch League explores how watchlist performance could become a
-simple game loop:
+Base has a fast-moving token ecosystem where social context, community conviction, and public watchlists can become useful discovery signals. Mergen Watch League explores how those signals could become a clearer product experience:
 
-- Pick 3 to 5 Base tokens for a weekly squad.
-- Each token appears as a character-style card with stance, XP, points, level,
-  and weekly performance.
-- Watchlist performance powers mock weekly scoring.
-- Players earn badges such as Win Streak, Early Watcher, Token Scout, Squad
-  Builder, High Roller, and Veteran.
-- Profiles preview future wallet identities, XP history, and market reputation.
-- Future versions could mint onchain badges and season achievements.
-
-## Current Demo Status
-
-This repository is an MVP demo built with Next.js, TypeScript, Tailwind CSS,
-App Router, ESLint, and npm.
-
-Everything is local and mocked. The app does not connect to wallets, execute
-swaps, call token APIs, index live prices, submit comments, or write onchain
-state.
-
-The League interface is still mock data only. It does not execute real swaps,
-wallet transactions, badge minting, or onchain writes.
-
-The current UI is simplified around a squad-builder-first experience: pick Base
-tokens, build a five-slot squad, earn weekly XP, and climb the leaderboard.
-The layout has been corrected so the first screen is a full game lobby with
-season, squad, score, leaderboard, and mini profile panels visible immediately.
-
-The UI supports English and Turkish through a small internal dictionary and a
-visible EN / TR toggle. English is the default language because the public demo
-is aimed at the Base builder ecosystem. Turkish support is included for local
-product review and stakeholder feedback.
+- More understandable than a dense trading dashboard
+- More social than a static token list
+- More game-like than a generic watchlist
+- Ready to evolve toward future onchain identity, badges, and attestations
 
 ## Routes
 
@@ -54,48 +61,20 @@ product review and stakeholder feedback.
 - `/watch/list/[id]`
 - `/watch/token/[address]`
 
-## What Is Mocked
+## Future Roadmap
 
-- Base tokens, addresses, prices, liquidity, holders, followers, mentions, and
-  volatility
-- User profiles, followers, reputation, and research badges
-- Weekly squads, token character cards, stance badges, XP, points, and levels
-- Watchlists, thesis notes, risk notes, and conviction scores
-- Activity feed events, likes, badges, and leaderboard ranks
-- Watchlist performance, hit rate, best call, worst call, and Mergen Watch Score
-
-No real API keys, private keys, seed phrases, or wallet transaction flows are
-required or included.
-
-## Performance Utilities
-
-The app includes utilities for:
-
-- Watchlist performance
-- Stance-aware hit rate
-- Best call
-- Worst call
-- Mergen Watch Score
-
-These calculations are informational and run only against the mock dataset.
-
-## Future Onchain Roadmap
-
-The intended onchain path is deliberately staged:
-
-1. Base Sepolia first for registry tests and wallet UX rehearsal.
-2. `MergenWatchRegistry` contract later for public watchlist attestations.
-3. Builder Code attribution later for downstream swap attribution.
-4. Paymaster and sponsored transactions later for low-friction watch actions.
-5. Real token price indexing later with liquidity and volatility safeguards.
-6. Comment moderation later before public write access.
-7. Future integration with the main Mergen Finance site.
+- Real wallet connect
+- Base Sepolia testing
+- `MergenWatchRegistry` contract
+- Builder Code attribution
+- Onchain badges and achievements
+- Real scoring and token indexing
+- Public leaderboard seasons
+- Private production version for deeper product development
 
 ## Safety Notes
 
-Community signals are not financial advice. Watchlist performance is
-informational. Users should verify liquidity, contract risk, and volatility
-before trading. This demo does not execute swaps or guarantee returns.
+Community signals are not financial advice. Watchlist performance is informational. Users should verify liquidity, contract risk, and volatility before trading. This public demo does not execute swaps, submit transactions, or guarantee returns.
 
 ## Run Locally
 
@@ -104,20 +83,20 @@ npm install
 npm run dev
 ```
 
-Then open:
+Open:
 
 ```text
 http://localhost:3000
 ```
 
-Validation commands:
+Validation:
 
 ```bash
 npm run lint
 npm run build
 ```
 
-On Windows PowerShell systems with script execution disabled, use:
+On Windows PowerShell systems with script execution disabled:
 
 ```bash
 npm.cmd run lint
@@ -126,6 +105,4 @@ npm.cmd run build
 
 ## Secrets Policy
 
-Do not commit secrets. This demo should remain safe to run publicly without
-API keys, private keys, seed phrases, production credentials, or privileged
-environment variables.
+Do not commit secrets. This public demo should remain safe to run without API keys, private keys, seed phrases, production credentials, or privileged environment variables.
