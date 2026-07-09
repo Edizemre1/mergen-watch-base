@@ -352,7 +352,7 @@ function StanceBadge({ stance }: { stance: LeagueStance }) {
   };
 
   return (
-    <span className={`inline-flex shrink-0 whitespace-nowrap rounded-lg border px-2 py-1 text-[11px] font-black ${classes[stance]}`}>
+    <span className={`inline-flex shrink-0 whitespace-nowrap rounded-lg border px-1.5 py-0.5 text-[10px] font-black ${classes[stance]}`}>
       {t(stanceKey(stance))}
     </span>
   );
@@ -447,7 +447,7 @@ function CharacterPlaceholder({
   return (
     <div
       className={cx(
-        "relative h-52 overflow-hidden rounded-2xl bg-gradient-to-br shadow-[inset_0_1px_18px_rgba(255,255,255,0.1)]",
+        "relative h-52 overflow-hidden rounded-xl bg-gradient-to-br",
         toneGradient(tone),
         className,
       )}
@@ -464,7 +464,6 @@ function CharacterPlaceholder({
             priority={["AERO", "DEGEN", "BRETT"].includes(token.symbol)}
           />
           <div className="absolute inset-0 bg-gradient-to-t from-black/26 via-transparent to-white/8" />
-          <div className="absolute inset-x-4 top-3 h-px bg-gradient-to-r from-transparent via-white/45 to-transparent" />
         </>
       ) : null}
       {!assetPath ? (
@@ -541,10 +540,10 @@ function SquadGameCard({
   const tone = tokenTones[token.symbol] ?? "blue";
   const symbolSizeClass =
     token.symbol.length >= 7
-      ? "text-[0.95rem] sm:text-base lg:text-[0.95rem] xl:text-sm 2xl:text-base"
+      ? "text-xl xl:text-[1.05rem] 2xl:text-xl"
       : token.symbol.length >= 5
-        ? "text-lg sm:text-2xl xl:text-xl 2xl:text-2xl"
-        : "text-3xl";
+        ? "text-2xl xl:text-[1.35rem] 2xl:text-2xl"
+        : "text-2xl";
 
   return (
     <Link
@@ -555,17 +554,12 @@ function SquadGameCard({
       <span className="pointer-events-none absolute -right-10 -top-10 h-28 w-28 rounded-full bg-blue-400/14 blur-3xl transition duration-300 group-hover:bg-lime-300/14" />
       <span className="pointer-events-none absolute -left-12 bottom-16 h-24 w-24 rounded-full bg-violet-400/8 blur-3xl" />
       <CharacterPlaceholder token={token} tone={tone} className="relative z-10" />
-      <div className="relative z-10 mt-3 flex items-start justify-between gap-2.5">
-        <div className="min-w-0 max-w-[calc(100%-6.5rem)] flex-1">
-          <div
-            className={cx(
-              "font-black leading-none text-white tracking-tight break-words",
-              symbolSizeClass,
-            )}
-          >
-            {token.symbol}
-          </div>
-          <div className="mt-1 min-w-0 space-y-0.5">
+      <div className="relative z-10 mt-3 min-w-0">
+        <div className={cx("whitespace-nowrap font-black leading-none text-white", symbolSizeClass)}>
+          {token.symbol}
+        </div>
+        <div className="mt-1.5 flex min-w-0 items-center justify-between gap-2">
+          <div className="min-w-0">
             <div className="truncate text-sm font-bold leading-4 text-slate-100">
               {token.name}
             </div>
@@ -573,8 +567,6 @@ function SquadGameCard({
               {token.sector}
             </div>
           </div>
-        </div>
-        <div className="shrink-0 self-start">
           <StanceBadge stance={stance} />
         </div>
       </div>
@@ -709,7 +701,7 @@ function SquadBuilderExperience() {
   );
 
   return (
-    <section className="relative flex min-h-full flex-col overflow-hidden rounded-2xl border border-blue-300/20 bg-slate-900/62 p-4 shadow-[0_18px_55px_rgba(0,0,0,0.3),inset_0_1px_0_rgba(255,255,255,0.06)]">
+    <section className="relative flex min-h-full flex-col overflow-hidden rounded-2xl border border-blue-300/24 bg-slate-900/66 p-4 shadow-[0_18px_55px_rgba(0,0,0,0.3),0_0_38px_rgba(37,99,235,0.16),inset_0_1px_0_rgba(255,255,255,0.08)]">
       <span className="pointer-events-none absolute left-8 top-20 h-56 w-56 rounded-full bg-blue-500/12 blur-3xl" />
       <span className="pointer-events-none absolute bottom-10 right-16 h-48 w-48 rounded-full bg-lime-300/10 blur-3xl" />
       <div className="relative z-10 flex flex-wrap items-start justify-between gap-4">
