@@ -236,9 +236,9 @@ function XpBar({ value, max = 2000 }: { value: number; max?: number }) {
   const width = Math.max(7, Math.min(100, (value / max) * 100));
 
   return (
-    <div className="h-2 rounded-full bg-black/45">
+    <div className="h-2 rounded-full bg-slate-950/70 shadow-[inset_0_1px_3px_rgba(0,0,0,0.45)]">
       <div
-        className="h-2 rounded-full bg-gradient-to-r from-blue-500 to-lime-300"
+        className="h-2 rounded-full bg-gradient-to-r from-blue-400 via-cyan-300 to-lime-300 shadow-[0_0_14px_rgba(56,189,248,0.25)]"
         style={{ width: `${width}%` }}
       />
     </div>
@@ -352,7 +352,7 @@ function StanceBadge({ stance }: { stance: LeagueStance }) {
   };
 
   return (
-    <span className={`inline-flex rounded-lg border px-2 py-1 text-xs font-black ${classes[stance]}`}>
+    <span className={`inline-flex shrink-0 whitespace-nowrap rounded-lg border px-2 py-1 text-[11px] font-black ${classes[stance]}`}>
       {t(stanceKey(stance))}
     </span>
   );
@@ -447,7 +447,7 @@ function CharacterPlaceholder({
   return (
     <div
       className={cx(
-        "relative h-52 overflow-hidden rounded-2xl border border-white/14 bg-gradient-to-br shadow-[inset_0_1px_14px_rgba(255,255,255,0.08)]",
+        "relative h-52 overflow-hidden rounded-2xl border border-white/16 bg-gradient-to-br shadow-[inset_0_1px_18px_rgba(255,255,255,0.1)]",
         toneGradient(tone),
         className,
       )}
@@ -463,7 +463,8 @@ function CharacterPlaceholder({
             style={{ objectPosition: "center 40%" }}
             priority={["AERO", "DEGEN", "BRETT"].includes(token.symbol)}
           />
-          <div className="absolute inset-0 bg-gradient-to-t from-black/30 via-transparent to-white/5" />
+          <div className="absolute inset-0 bg-gradient-to-t from-black/26 via-transparent to-white/8" />
+          <div className="absolute inset-x-4 top-3 h-px bg-gradient-to-r from-transparent via-white/45 to-transparent" />
         </>
       ) : null}
       {!assetPath ? (
@@ -538,32 +539,50 @@ function SquadGameCard({
   const performance = entry ? getEntryReturnPct(entry) : token.change7d;
   const stance = mapStance(entry?.stance ?? (token.change7d > 0 ? "Bullish" : "Neutral"));
   const tone = tokenTones[token.symbol] ?? "blue";
+  const isLongSymbol = token.symbol.length > 6;
 
   return (
     <Link
       href={`/watch/token/${token.address}`}
-      className="group flex min-h-[366px] flex-col rounded-2xl border border-blue-300/25 bg-slate-950/82 p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.06),inset_0_-18px_38px_rgba(15,23,42,0.24),0_18px_44px_rgba(0,0,0,0.28)] transition-all duration-300 ease-out hover:-translate-y-1 hover:border-blue-300/60 hover:shadow-[inset_0_1px_0_rgba(255,255,255,0.08),inset_0_-18px_38px_rgba(15,23,42,0.18),0_22px_54px_rgba(37,99,235,0.18)]"
+      className="group relative flex min-h-[366px] flex-col overflow-hidden rounded-2xl border border-blue-300/35 bg-gradient-to-b from-slate-900/92 via-slate-950/84 to-slate-950/90 p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.08),inset_0_-18px_38px_rgba(15,23,42,0.22),0_18px_44px_rgba(0,0,0,0.28)] transition-all duration-300 ease-out hover:-translate-y-1 hover:border-lime-300/55 hover:shadow-[inset_0_1px_0_rgba(255,255,255,0.12),inset_0_-18px_38px_rgba(15,23,42,0.16),0_22px_58px_rgba(37,99,235,0.22)]"
     >
-      <CharacterPlaceholder token={token} tone={tone} />
-      <div className="mt-3 flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <div className="text-3xl font-black leading-none text-white">{token.symbol}</div>
-          <div className="mt-1 truncate text-sm font-semibold text-slate-300">{token.name}</div>
+      <span className="pointer-events-none absolute inset-x-3 top-2 h-px bg-gradient-to-r from-transparent via-white/35 to-transparent" />
+      <span className="pointer-events-none absolute -right-10 -top-10 h-28 w-28 rounded-full bg-blue-400/14 blur-3xl transition duration-300 group-hover:bg-lime-300/14" />
+      <span className="pointer-events-none absolute -left-12 bottom-16 h-24 w-24 rounded-full bg-violet-400/8 blur-3xl" />
+      <CharacterPlaceholder token={token} tone={tone} className="relative z-10" />
+      <div className="relative z-10 mt-3 flex items-start justify-between gap-2.5">
+        <div className="min-w-0 flex-1">
+          <div
+            className={cx(
+              "truncate font-black leading-none text-white",
+              isLongSymbol ? "text-[1.35rem] sm:text-2xl xl:text-[1.45rem]" : "text-3xl",
+            )}
+          >
+            {token.symbol}
+          </div>
+          <div className="mt-1 truncate text-sm font-semibold text-slate-200">
+            {token.name}
+            <span className="text-slate-400"> / {token.sector}</span>
+          </div>
         </div>
         <StanceBadge stance={stance} />
       </div>
-      <div className="mt-3">
+      <div className="relative z-10 mt-3">
         <XpBar value={xp} max={1800} />
       </div>
-      <div className="mt-auto grid grid-cols-2 gap-2.5 pt-3">
-        <div className="rounded-xl border border-white/10 bg-black/24 p-2.5">
-          <MiniMetric label={t("metric.performance")} value={formatPercent(performance)} />
+      <div className="relative z-10 mt-auto grid grid-cols-2 gap-2.5 pt-3">
+        <div className="rounded-xl border border-blue-100/14 bg-slate-800/52 p-2.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]">
+          <MiniMetric
+            label={t("metric.performance")}
+            value={formatPercent(performance)}
+            valueClassName={performance >= 0 ? "text-lime-100" : "text-rose-100"}
+          />
         </div>
-        <div className="rounded-xl border border-white/10 bg-black/24 p-2.5">
-          <MiniMetric label={t("metric.xp")} value={xp.toString()} />
+        <div className="rounded-xl border border-blue-100/14 bg-slate-800/52 p-2.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]">
+          <MiniMetric label={t("metric.xp")} value={xp.toString()} valueClassName="text-blue-100" />
         </div>
-        <div className="col-span-2 rounded-xl border border-lime-300/18 bg-lime-300/10 p-2.5">
-          <MiniMetric label={t("metric.points")} value={formatPoints(points)} />
+        <div className="col-span-2 rounded-xl border border-lime-300/24 bg-lime-300/14 p-2.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]">
+          <MiniMetric label={t("metric.points")} value={formatPoints(points)} valueClassName="text-lime-100" />
         </div>
       </div>
     </Link>
@@ -679,8 +698,10 @@ function SquadBuilderExperience() {
   );
 
   return (
-    <section className="flex min-h-full flex-col rounded-2xl border border-blue-300/16 bg-slate-950/76 p-4 shadow-[0_18px_50px_rgba(0,0,0,0.28)]">
-      <div className="flex flex-wrap items-start justify-between gap-4">
+    <section className="relative flex min-h-full flex-col overflow-hidden rounded-2xl border border-blue-300/20 bg-slate-900/62 p-4 shadow-[0_18px_55px_rgba(0,0,0,0.3),inset_0_1px_0_rgba(255,255,255,0.06)]">
+      <span className="pointer-events-none absolute left-8 top-20 h-56 w-56 rounded-full bg-blue-500/12 blur-3xl" />
+      <span className="pointer-events-none absolute bottom-10 right-16 h-48 w-48 rounded-full bg-lime-300/10 blur-3xl" />
+      <div className="relative z-10 flex flex-wrap items-start justify-between gap-4">
         <div>
           <div className="inline-flex rounded-lg border border-lime-300/20 bg-lime-300/8 px-3 py-1 text-xs font-black text-lime-200">
             {t("demo.notice")}
@@ -696,7 +717,7 @@ function SquadBuilderExperience() {
           {squad.length} / {maxSquadSlots} {t("squad.slots").toUpperCase()}
         </div>
       </div>
-      <div className="mt-5 grid flex-1 gap-4 sm:grid-cols-2 xl:grid-cols-5">
+      <div className="relative z-10 mt-5 grid flex-1 gap-4 sm:grid-cols-2 xl:grid-cols-5">
         {squad.map(({ token, entry }, index) => (
           <SquadGameCard key={token.address} token={token} entry={entry} index={index} />
         ))}
@@ -770,11 +791,19 @@ function ProfilePanel({ address = users[0].address }: { address?: string }) {
   );
 }
 
-function MiniMetric({ label, value }: { label: string; value: string }) {
+function MiniMetric({
+  label,
+  value,
+  valueClassName,
+}: {
+  label: string;
+  value: string;
+  valueClassName?: string;
+}) {
   return (
     <div>
-      <div className="text-[10px] font-black uppercase tracking-wide text-slate-400">{label}</div>
-      <div className="mt-1 text-lg font-black leading-none text-white">{value}</div>
+      <div className="text-[10px] font-black uppercase tracking-wide text-slate-300">{label}</div>
+      <div className={cx("mt-1 text-lg font-black leading-none text-white", valueClassName)}>{value}</div>
     </div>
   );
 }
