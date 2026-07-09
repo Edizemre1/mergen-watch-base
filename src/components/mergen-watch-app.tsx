@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { LanguageToggle, type CopyKey, useLanguage } from "@/components/language";
 import {
@@ -28,6 +29,7 @@ import {
   getEntryReturnPct,
   shortAddress,
 } from "@/lib/performance";
+import { getTokenAssetPath } from "@/lib/token-assets";
 import type { Comment, Stance, Token, UserProfile, Watchlist, WatchlistEntry } from "@/lib/types";
 
 type LeagueStance = "Bullish" | "Watching" | "Risky" | "Avoid";
@@ -381,13 +383,14 @@ function TokenCharacterCard({
         compact ? "border-white/12" : "border-blue-300/25",
       )}
     >
-      <div className={`relative h-40 bg-gradient-to-br ${toneGradient(tone)} p-3`}>
+      <div className="relative">
+        <CharacterPlaceholder
+          token={token}
+          tone={tone}
+          className={compact ? "h-72 rounded-none border-0" : "h-44 rounded-none border-0"}
+        />
         <div className="absolute right-3 top-3 rounded-lg border border-white/15 bg-black/45 px-2 py-1 text-xs font-black text-white">
           {index + 1}
-        </div>
-        <div className="absolute inset-x-5 bottom-4 h-24 rounded-[2rem] border border-white/12 bg-black/25" />
-        <div className="absolute bottom-7 left-1/2 grid size-24 -translate-x-1/2 place-items-center rounded-3xl border border-white/20 bg-black/35 text-4xl font-black text-white shadow-[0_0_30px_rgba(59,130,246,0.28)]">
-          {token.symbol.slice(0, 2)}
         </div>
       </div>
       <div className="p-4">
@@ -425,13 +428,44 @@ function TokenCharacterCard({
   );
 }
 
-function CharacterPlaceholder({ token, tone }: { token: Token; tone: ArtTone }) {
+function CharacterPlaceholder({
+  token,
+  tone,
+  className,
+}: {
+  token: Token;
+  tone: ArtTone;
+  className?: string;
+}) {
+  const assetPath = getTokenAssetPath(token);
   const isAero = token.symbol === "AERO";
   const isDegen = token.symbol === "DEGEN";
   const isBrett = token.symbol === "BRETT";
 
   return (
-    <div className={`relative h-56 overflow-hidden rounded-2xl border border-white/12 bg-gradient-to-br ${toneGradient(tone)} p-4`}>
+    <div
+      className={cx(
+        "relative h-56 overflow-hidden rounded-2xl border border-white/12 bg-gradient-to-br",
+        toneGradient(tone),
+        className,
+      )}
+    >
+      {assetPath ? (
+        <>
+          <Image
+            src={assetPath}
+            alt={`${token.name} character`}
+            fill
+            sizes="(max-width: 768px) 92vw, (max-width: 1280px) 42vw, 18vw"
+            className="object-cover"
+            style={{ objectPosition: "center 42%" }}
+            priority={["AERO", "DEGEN", "BRETT"].includes(token.symbol)}
+          />
+          <div className="absolute inset-0 bg-gradient-to-t from-black/35 via-transparent to-black/10" />
+        </>
+      ) : null}
+      {!assetPath ? (
+        <>
       <div className="absolute inset-x-5 bottom-5 h-24 rounded-[2rem] border border-white/12 bg-black/20" />
       {isAero ? (
         <>
@@ -481,6 +515,8 @@ function CharacterPlaceholder({ token, tone }: { token: Token; tone: ArtTone }) 
       <div className="absolute bottom-5 left-1/2 -translate-x-1/2 rounded-xl border border-white/15 bg-black/45 px-4 py-1 text-xl font-black text-white">
         {token.symbol.slice(0, 2)}
       </div>
+        </>
+      ) : null}
     </div>
   );
 }
