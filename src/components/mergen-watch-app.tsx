@@ -44,6 +44,8 @@ const tokenTones: Record<string, ArtTone> = {
   BRETT: "cyan",
   TOSHI: "green",
   DEGEN: "violet",
+  CAW: "rose",
+  DOGINME: "green",
   VIRTUAL: "gold",
   HIGHER: "rose",
   KEYCAT: "blue",
@@ -113,7 +115,7 @@ function getTokenLevel(token: Token, index = 0) {
 }
 
 function getSquadBuilderEntries(): Array<{ token: Token; entry?: WatchlistEntry }> {
-  const preferredSymbols = ["AERO", "DEGEN", "BRETT"];
+  const preferredSymbols = ["DEGEN", "BRETT", "TOSHI", "CAW", "DOGINME"];
   const allEntries = watchlists.flatMap((watchlist) => watchlist.entries);
 
   return preferredSymbols.flatMap((symbol) => {
@@ -667,6 +669,10 @@ function WeeklyScorePanel() {
 function SquadBuilderExperience() {
   const { t } = useLanguage();
   const squad = getSquadBuilderEntries();
+  const emptySlots = Array.from(
+    { length: Math.max(0, maxSquadSlots - squad.length) },
+    (_, slotIndex) => squad.length + slotIndex,
+  );
 
   return (
     <section className="flex min-h-full flex-col rounded-2xl border border-blue-300/16 bg-slate-950/76 p-4 shadow-[0_18px_50px_rgba(0,0,0,0.28)]">
@@ -690,8 +696,9 @@ function SquadBuilderExperience() {
         {squad.map(({ token, entry }, index) => (
           <SquadGameCard key={token.address} token={token} entry={entry} index={index} />
         ))}
-        <AddGameCard index={3} />
-        <AddGameCard index={4} />
+        {emptySlots.map((slotIndex) => (
+          <AddGameCard key={slotIndex} index={slotIndex} />
+        ))}
       </div>
     </section>
   );
