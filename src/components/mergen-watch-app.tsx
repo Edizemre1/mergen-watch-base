@@ -447,7 +447,7 @@ function CharacterPlaceholder({
   return (
     <div
       className={cx(
-        "relative h-56 overflow-hidden rounded-2xl border border-white/12 bg-gradient-to-br",
+        "relative h-52 overflow-hidden rounded-2xl border border-white/14 bg-gradient-to-br shadow-[inset_0_1px_14px_rgba(255,255,255,0.08)]",
         toneGradient(tone),
         className,
       )}
@@ -459,11 +459,11 @@ function CharacterPlaceholder({
             alt={`${token.name} character`}
             fill
             sizes="(max-width: 768px) 92vw, (max-width: 1280px) 42vw, 18vw"
-            className="object-cover"
-            style={{ objectPosition: "center 42%" }}
+            className="scale-[1.08] object-cover transition-transform duration-300 ease-out group-hover:scale-[1.1]"
+            style={{ objectPosition: "center 40%" }}
             priority={["AERO", "DEGEN", "BRETT"].includes(token.symbol)}
           />
-          <div className="absolute inset-0 bg-gradient-to-t from-black/35 via-transparent to-black/10" />
+          <div className="absolute inset-0 bg-gradient-to-t from-black/30 via-transparent to-white/5" />
         </>
       ) : null}
       {!assetPath ? (
@@ -542,23 +542,27 @@ function SquadGameCard({
   return (
     <Link
       href={`/watch/token/${token.address}`}
-      className="group flex min-h-[430px] flex-col rounded-2xl border border-blue-300/20 bg-slate-950/82 p-3 shadow-[0_18px_46px_rgba(0,0,0,0.3)] transition hover:-translate-y-1 hover:border-blue-300/55"
+      className="group flex min-h-[366px] flex-col rounded-2xl border border-blue-300/25 bg-slate-950/82 p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.06),inset_0_-18px_38px_rgba(15,23,42,0.24),0_18px_44px_rgba(0,0,0,0.28)] transition-all duration-300 ease-out hover:-translate-y-1 hover:border-blue-300/60 hover:shadow-[inset_0_1px_0_rgba(255,255,255,0.08),inset_0_-18px_38px_rgba(15,23,42,0.18),0_22px_54px_rgba(37,99,235,0.18)]"
     >
       <CharacterPlaceholder token={token} tone={tone} />
-      <div className="mt-4 flex items-start justify-between gap-3">
-        <div>
+      <div className="mt-3 flex items-start justify-between gap-3">
+        <div className="min-w-0">
           <div className="text-3xl font-black leading-none text-white">{token.symbol}</div>
-          <div className="mt-1 truncate text-xs text-slate-500">{token.name}</div>
+          <div className="mt-1 truncate text-sm font-semibold text-slate-300">{token.name}</div>
         </div>
         <StanceBadge stance={stance} />
       </div>
-      <div className="mt-4">
+      <div className="mt-3">
         <XpBar value={xp} max={1800} />
       </div>
-      <div className="mt-auto grid grid-cols-2 gap-2 pt-4">
-        <MiniMetric label={t("metric.performance")} value={formatPercent(performance)} />
-        <MiniMetric label={t("metric.xp")} value={xp.toString()} />
-        <div className="col-span-2 rounded-xl border border-lime-300/15 bg-lime-300/8 p-3">
+      <div className="mt-auto grid grid-cols-2 gap-2.5 pt-3">
+        <div className="rounded-xl border border-white/10 bg-black/24 p-2.5">
+          <MiniMetric label={t("metric.performance")} value={formatPercent(performance)} />
+        </div>
+        <div className="rounded-xl border border-white/10 bg-black/24 p-2.5">
+          <MiniMetric label={t("metric.xp")} value={xp.toString()} />
+        </div>
+        <div className="col-span-2 rounded-xl border border-lime-300/18 bg-lime-300/10 p-2.5">
           <MiniMetric label={t("metric.points")} value={formatPoints(points)} />
         </div>
       </div>
@@ -570,7 +574,7 @@ function AddGameCard({ index }: { index: number }) {
   const { t } = useLanguage();
 
   return (
-    <div className="grid min-h-[430px] place-items-center rounded-2xl border border-dashed border-lime-300/35 bg-slate-950/58 p-4 text-center">
+    <div className="grid min-h-[366px] place-items-center rounded-2xl border border-dashed border-lime-300/35 bg-slate-950/58 p-4 text-center transition-all duration-300 ease-out hover:-translate-y-1 hover:border-lime-300/55 hover:shadow-[0_20px_48px_rgba(132,204,22,0.12)]">
       <div>
         <div className="mx-auto grid size-24 place-items-center rounded-full border border-lime-300/35 bg-lime-300/8 text-6xl font-light text-lime-300">
           +
@@ -692,7 +696,7 @@ function SquadBuilderExperience() {
           {squad.length} / {maxSquadSlots} {t("squad.slots").toUpperCase()}
         </div>
       </div>
-      <div className="mt-5 grid flex-1 gap-3 sm:grid-cols-2 xl:grid-cols-5">
+      <div className="mt-5 grid flex-1 gap-4 sm:grid-cols-2 xl:grid-cols-5">
         {squad.map(({ token, entry }, index) => (
           <SquadGameCard key={token.address} token={token} entry={entry} index={index} />
         ))}
@@ -769,8 +773,8 @@ function ProfilePanel({ address = users[0].address }: { address?: string }) {
 function MiniMetric({ label, value }: { label: string; value: string }) {
   return (
     <div>
-      <div className="text-[11px] uppercase text-slate-500">{label}</div>
-      <div className="mt-1 font-black text-white">{value}</div>
+      <div className="text-[10px] font-black uppercase tracking-wide text-slate-400">{label}</div>
+      <div className="mt-1 text-lg font-black leading-none text-white">{value}</div>
     </div>
   );
 }
