@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { type FormEvent, useEffect, useMemo, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { LanguageToggle, type CopyKey, useLanguage } from "@/components/language";
@@ -36,8 +36,10 @@ import type { Comment, Stance, Token, UserProfile, Watchlist, WatchlistEntry } f
 type LeagueStance = "Bullish" | "Watching" | "Risky" | "Avoid";
 type ArtTone = "blue" | "violet" | "cyan" | "green" | "gold" | "rose";
 type SquadSlot = { token: Token; entry?: WatchlistEntry } | null;
+type WatcherProfile = { nickname: string; avatarSymbol: string };
 
 const githubUrl = "https://github.com/Edizemre1/mergen-watch-base";
+const profileStorageKey = "mergen-watch-player-profile";
 const playerRank = 256;
 const maxSquadSlots = 5;
 const defaultSquadSlotSymbols = ["DEGEN", "BRETT", "TOSHI", null, null] as const;
@@ -63,6 +65,16 @@ const squadSelectionSymbols = [
   "HIGHER",
   "RUSSELL",
   "MEOW",
+] as const;
+const profileAvatarSymbols = [
+  "DEGEN",
+  "BRETT",
+  "TOSHI",
+  "CAW",
+  "DOGINME",
+  "KEYCAT",
+  "MIGGLES",
+  "BASE GOD",
 ] as const;
 
 const tokenTones: Record<string, ArtTone> = {
@@ -162,6 +174,11 @@ const squadSelectionTokens = squadSelectionSymbols.flatMap((symbol) => {
   return token ? [token] : [];
 });
 
+const profileAvatarTokens = profileAvatarSymbols.flatMap((symbol) => {
+  const token = getSquadTokenBySymbol(symbol);
+  return token ? [token] : [];
+});
+
 const leaderboard = [
   { handle: "@defi_king", avatar: "DK", points: 15240 },
   { handle: "@token_sorcerer", avatar: "TS", points: 9870 },
@@ -256,6 +273,46 @@ function getSquadTotals(squad: SquadSlot[] = getSquadSlots(defaultSquadSlotSymbo
       0,
     ),
   };
+}
+
+function loadStoredWatcherProfile(): WatcherProfile | null {
+  if (typeof window === "undefined") {
+    return null;
+  }
+
+  try {
+    const storedProfile = window.localStorage.getItem(profileStorageKey);
+
+    if (!storedProfile) {
+      return null;
+    }
+
+    const parsedProfile = JSON.parse(storedProfile) as Partial<WatcherProfile>;
+
+    if (
+      typeof parsedProfile.nickname === "string" &&
+      typeof parsedProfile.avatarSymbol === "string"
+    ) {
+      return {
+        nickname: parsedProfile.nickname,
+        avatarSymbol: parsedProfile.avatarSymbol,
+      };
+    }
+  } catch {
+    return null;
+  }
+
+  return null;
+}
+
+function formatWatcherHandle(profile: WatcherProfile | null) {
+  const nickname = profile?.nickname.trim();
+
+  if (!nickname) {
+    return "@basehunter";
+  }
+
+  return nickname.startsWith("@") ? nickname : `@${nickname}`;
 }
 
 function gameActionForComment(comment: Comment) {
@@ -386,6 +443,46 @@ function PixelAvatar({
       <div className={`relative grid place-items-center rounded-lg border border-white/15 bg-black/34 font-black text-white ${innerSizeClass}`}>
         {label}
       </div>
+    </div>
+  );
+}
+
+function TokenAvatarTile({
+  token,
+  selected = false,
+  className,
+}: {
+  token: Token;
+  selected?: boolean;
+  className?: string;
+}) {
+  const assetPath = getTokenAssetPath(token);
+
+  return (
+    <div
+      className={cx(
+        "relative grid size-16 shrink-0 place-items-center overflow-hidden rounded-xl border bg-slate-950/80",
+        selected
+          ? "border-lime-300 shadow-[0_0_24px_rgba(132,204,22,0.3)]"
+          : "border-blue-300/18",
+        className,
+      )}
+    >
+      {assetPath ? (
+        <Image
+          src={assetPath}
+          alt={`${token.name} avatar`}
+          fill
+          sizes="96px"
+          className="scale-110 object-cover"
+          style={{ objectPosition: "center 36%" }}
+        />
+      ) : (
+        <span className="relative z-10 text-sm font-black text-white">
+          {token.symbol.slice(0, 2)}
+        </span>
+      )}
+      <span className="absolute inset-0 bg-gradient-to-t from-black/35 via-transparent to-white/10" />
     </div>
   );
 }
@@ -774,9 +871,18 @@ function WeeklySeasonPanel({ totals }: { totals: ReturnType<typeof getSquadTotal
   );
 }
 
-function WeeklyScorePanel({ totals }: { totals: ReturnType<typeof getSquadTotals> }) {
+function WeeklyScorePanel({
+  totals,
+  profile,
+  onOpenProfile,
+}: {
+  totals: ReturnType<typeof getSquadTotals>;
+  profile: WatcherProfile | null;
+  onOpenProfile: () => void;
+}) {
   const { t } = useLanguage();
   const { weeklyXp, weeklyPoints } = totals;
+  const avatarToken = profile ? getSquadTokenBySymbol(profile.avatarSymbol) : null;
 
   return (
     <aside className="flex min-h-full flex-col gap-4 rounded-2xl border border-blue-300/20 bg-slate-900/66 p-4 shadow-[0_18px_50px_rgba(0,0,0,0.28),inset_0_1px_0_rgba(255,255,255,0.05)]">
@@ -806,16 +912,137 @@ function WeeklyScorePanel({ totals }: { totals: ReturnType<typeof getSquadTotals
           ))}
         </div>
       </div>
-      <div className="mt-auto rounded-2xl border border-lime-300/18 bg-lime-300/8 p-3">
+      <button
+        type="button"
+        onClick={onOpenProfile}
+        className="mt-auto w-full rounded-2xl border border-lime-300/18 bg-lime-300/8 p-3 text-left transition hover:border-lime-300/40 hover:bg-lime-300/12 hover:shadow-[0_0_26px_rgba(132,204,22,0.14)]"
+      >
         <div className="flex items-center gap-3">
-          <PixelAvatar label="BH" tone="green" selected />
+          {avatarToken ? (
+            <TokenAvatarTile token={avatarToken} selected />
+          ) : (
+            <PixelAvatar label="BH" tone="green" selected />
+          )}
           <div className="min-w-0">
-            <div className="font-black text-white">{t("profile.handle")}</div>
+            <div className="truncate font-black text-white">{formatWatcherHandle(profile)}</div>
             <div className="text-xs text-slate-300">{t("profile.role")}</div>
+            <div className="mt-1 text-xs font-black text-lime-300">
+              {formatPoints(weeklyXp)} XP
+            </div>
           </div>
         </div>
-      </div>
+      </button>
     </aside>
+  );
+}
+
+function ProfileSetupModal({
+  profile,
+  onClose,
+  onSave,
+}: {
+  profile: WatcherProfile | null;
+  onClose: () => void;
+  onSave: (profile: WatcherProfile) => void;
+}) {
+  const { t } = useLanguage();
+  const [nickname, setNickname] = useState(profile?.nickname ?? "");
+  const [avatarSymbol, setAvatarSymbol] = useState(
+    profile?.avatarSymbol ?? profileAvatarTokens[0]?.symbol ?? "DEGEN",
+  );
+  const selectedAvatarToken =
+    getSquadTokenBySymbol(avatarSymbol) ?? profileAvatarTokens[0];
+
+  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    if (!selectedAvatarToken) {
+      return;
+    }
+
+    onSave({
+      nickname: nickname.trim() || "basehunter",
+      avatarSymbol: selectedAvatarToken.symbol,
+    });
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 grid place-items-center bg-black/72 px-3 py-4 backdrop-blur-md sm:px-5 sm:py-6">
+      <form
+        onSubmit={handleSubmit}
+        className="relative w-full max-w-3xl overflow-hidden rounded-2xl border border-blue-300/32 bg-slate-950/96 shadow-[0_0_70px_rgba(37,99,235,0.26),inset_0_1px_0_rgba(255,255,255,0.08)]"
+      >
+        <span className="pointer-events-none absolute left-8 top-8 h-40 w-40 rounded-full bg-blue-500/14 blur-3xl" />
+        <span className="pointer-events-none absolute bottom-8 right-10 h-40 w-40 rounded-full bg-lime-300/10 blur-3xl" />
+        <div className="relative z-10 flex items-start justify-between gap-4 border-b border-white/10 p-5">
+          <div>
+            <h2 className="text-2xl font-black text-white sm:text-3xl">
+              {t("profile.setupTitle")}
+            </h2>
+            <p className="mt-2 text-sm font-semibold text-slate-300">
+              {t("profile.setupSubtitle")}
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="grid size-10 shrink-0 place-items-center rounded-xl border border-white/12 bg-white/6 text-sm font-black text-slate-200 transition hover:border-blue-300/40 hover:text-white"
+            aria-label="Close"
+          >
+            X
+          </button>
+        </div>
+        <div className="relative z-10 grid gap-5 p-5">
+          <label className="grid gap-2">
+            <span className="text-xs font-black uppercase tracking-wide text-slate-300">
+              {t("profile.nickname")}
+            </span>
+            <input
+              type="text"
+              value={nickname}
+              onChange={(event) => setNickname(event.target.value)}
+              placeholder={t("profile.nicknamePlaceholder")}
+              className="rounded-xl border border-blue-300/18 bg-slate-900/78 px-4 py-3 text-sm font-bold text-white outline-none transition placeholder:text-slate-500 focus:border-lime-300/45 focus:shadow-[0_0_24px_rgba(132,204,22,0.12)]"
+            />
+          </label>
+          <div>
+            <div className="text-xs font-black uppercase tracking-wide text-slate-300">
+              {t("profile.avatar")}
+            </div>
+            <div className="mt-3 grid grid-cols-4 gap-3 sm:grid-cols-8">
+              {profileAvatarTokens.map((token) => {
+                const selected = token.symbol === avatarSymbol;
+
+                return (
+                  <button
+                    key={token.symbol}
+                    type="button"
+                    onClick={() => setAvatarSymbol(token.symbol)}
+                    className={cx(
+                      "rounded-2xl border bg-slate-900/64 p-2 transition hover:-translate-y-0.5",
+                      selected
+                        ? "border-lime-300/70 shadow-[0_0_24px_rgba(132,204,22,0.2)]"
+                        : "border-white/10 hover:border-blue-300/45",
+                    )}
+                  >
+                    <TokenAvatarTile token={token} selected={selected} className="mx-auto size-16" />
+                    <div className="mt-2 truncate text-[10px] font-black text-slate-200">
+                      {token.symbol}
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+          <button
+            type="submit"
+            className="rounded-xl border border-lime-300/35 bg-lime-300/14 px-4 py-3 text-sm font-black text-lime-100 transition hover:bg-lime-300/20 hover:shadow-[0_0_28px_rgba(132,204,22,0.18)]"
+          >
+            {t("profile.save")}
+          </button>
+        </div>
+      </form>
+    </div>
   );
 }
 
@@ -1013,7 +1240,17 @@ function GameLobbyScreen() {
   const [squadSlots, setSquadSlots] = useState<SquadSlot[]>(() =>
     getSquadSlots(defaultSquadSlotSymbols),
   );
+  const [watcherProfile, setWatcherProfile] = useState<WatcherProfile | null>(() =>
+    loadStoredWatcherProfile(),
+  );
+  const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
   const totals = useMemo(() => getSquadTotals(squadSlots), [squadSlots]);
+
+  useEffect(() => {
+    if (watcherProfile) {
+      window.localStorage.setItem(profileStorageKey, JSON.stringify(watcherProfile));
+    }
+  }, [watcherProfile]);
 
   function handleSelectToken(slotIndex: number, token: Token) {
     setSquadSlots((currentSlots) => {
@@ -1041,7 +1278,21 @@ function GameLobbyScreen() {
         onSelectToken={handleSelectToken}
         onRemoveToken={handleRemoveToken}
       />
-      <WeeklyScorePanel totals={totals} />
+      <WeeklyScorePanel
+        totals={totals}
+        profile={watcherProfile}
+        onOpenProfile={() => setIsProfileModalOpen(true)}
+      />
+      {isProfileModalOpen ? (
+        <ProfileSetupModal
+          profile={watcherProfile}
+          onClose={() => setIsProfileModalOpen(false)}
+          onSave={(nextProfile) => {
+            setWatcherProfile(nextProfile);
+            setIsProfileModalOpen(false);
+          }}
+        />
+      ) : null}
     </div>
   );
 }
