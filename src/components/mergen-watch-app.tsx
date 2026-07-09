@@ -40,6 +40,9 @@ type WatcherProfile = { nickname: string; avatarSymbol: string };
 
 const githubUrl = "https://github.com/Edizemre1/mergen-watch-base";
 const profileStorageKey = "mergen-watch-player-profile";
+const squadStorageKey = "mergen-watch-squad-slots";
+const walletSessionStorageKey = "mergen-watch-wallet-session";
+const mockWalletAddress = "0xBase...Hunter";
 const playerRank = 256;
 const maxSquadSlots = 5;
 const defaultSquadSlotSymbols = ["DEGEN", "BRETT", "TOSHI", null, null] as const;
@@ -263,6 +266,61 @@ function getSquadSlots(symbols: readonly (string | null)[]): SquadSlot[] {
   });
 }
 
+function getStoredSquadSlots() {
+  if (typeof window === "undefined") {
+    return getSquadSlots(defaultSquadSlotSymbols);
+  }
+
+  try {
+    const storedSquad = window.localStorage.getItem(squadStorageKey);
+
+    if (!storedSquad) {
+      return getSquadSlots(defaultSquadSlotSymbols);
+    }
+
+    const parsedSquad = JSON.parse(storedSquad);
+
+    if (!Array.isArray(parsedSquad)) {
+      return getSquadSlots(defaultSquadSlotSymbols);
+    }
+
+    const seenSymbols = new Set<string>();
+    const symbols = Array.from({ length: maxSquadSlots }, (_, index) => {
+      const symbol = parsedSquad[index];
+
+      if (typeof symbol !== "string") {
+        return null;
+      }
+
+      const token = getSquadTokenBySymbol(symbol);
+
+      if (!token || seenSymbols.has(token.symbol)) {
+        return null;
+      }
+
+      seenSymbols.add(token.symbol);
+      return token.symbol;
+    });
+
+    return getSquadSlots(symbols);
+  } catch {
+    return getSquadSlots(defaultSquadSlotSymbols);
+  }
+}
+
+function getProfileStorageKey(walletAddress: string) {
+  return `${profileStorageKey}:${walletAddress}`;
+}
+
+function loadStoredWalletSession() {
+  if (typeof window === "undefined") {
+    return null;
+  }
+
+  const storedWallet = window.localStorage.getItem(walletSessionStorageKey);
+  return storedWallet === mockWalletAddress ? storedWallet : null;
+}
+
 function getSquadTotals(squad: SquadSlot[] = getSquadSlots(defaultSquadSlotSymbols)) {
   const filledSquad = squad.filter((slot): slot is NonNullable<SquadSlot> => Boolean(slot));
 
@@ -275,13 +333,13 @@ function getSquadTotals(squad: SquadSlot[] = getSquadSlots(defaultSquadSlotSymbo
   };
 }
 
-function loadStoredWatcherProfile(): WatcherProfile | null {
-  if (typeof window === "undefined") {
+function loadStoredWatcherProfile(walletAddress: string | null): WatcherProfile | null {
+  if (typeof window === "undefined" || !walletAddress) {
     return null;
   }
 
   try {
-    const storedProfile = window.localStorage.getItem(profileStorageKey);
+    const storedProfile = window.localStorage.getItem(getProfileStorageKey(walletAddress));
 
     if (!storedProfile) {
       return null;
@@ -313,6 +371,10 @@ function formatWatcherHandle(profile: WatcherProfile | null) {
   }
 
   return nickname.startsWith("@") ? nickname : `@${nickname}`;
+}
+
+function formatMockWalletAddress(walletAddress: string | null) {
+  return walletAddress ?? mockWalletAddress;
 }
 
 function gameActionForComment(comment: Comment) {
@@ -874,15 +936,27 @@ function WeeklySeasonPanel({ totals }: { totals: ReturnType<typeof getSquadTotal
 function WeeklyScorePanel({
   totals,
   profile,
-  onOpenProfile,
+  walletAddress,
+  onConnectWallet,
+  onDisconnectWallet,
+  onEditProfile,
 }: {
   totals: ReturnType<typeof getSquadTotals>;
   profile: WatcherProfile | null;
-  onOpenProfile: () => void;
+  walletAddress: string | null;
+  onConnectWallet: () => void;
+  onDisconnectWallet: () => void;
+  onEditProfile: () => void;
 }) {
   const { t } = useLanguage();
   const { weeklyXp, weeklyPoints } = totals;
   const avatarToken = profile ? getSquadTokenBySymbol(profile.avatarSymbol) : null;
+  const connected = Boolean(walletAddress);
+  const displayName = connected && profile
+    ? formatWatcherHandle(profile)
+    : connected
+      ? formatMockWalletAddress(walletAddress)
+      : t("profile.handle");
 
   return (
     <aside className="flex min-h-full flex-col gap-4 rounded-2xl border border-blue-300/20 bg-slate-900/66 p-4 shadow-[0_18px_50px_rgba(0,0,0,0.28),inset_0_1px_0_rgba(255,255,255,0.05)]">
@@ -912,11 +986,7 @@ function WeeklyScorePanel({
           ))}
         </div>
       </div>
-      <button
-        type="button"
-        onClick={onOpenProfile}
-        className="mt-auto w-full rounded-2xl border border-lime-300/18 bg-lime-300/8 p-3 text-left transition hover:border-lime-300/40 hover:bg-lime-300/12 hover:shadow-[0_0_26px_rgba(132,204,22,0.14)]"
-      >
+      <div className="mt-auto rounded-2xl border border-lime-300/18 bg-lime-300/8 p-3">
         <div className="flex items-center gap-3">
           {avatarToken ? (
             <TokenAvatarTile token={avatarToken} selected />
@@ -924,24 +994,59 @@ function WeeklyScorePanel({
             <PixelAvatar label="BH" tone="green" selected />
           )}
           <div className="min-w-0">
-            <div className="truncate font-black text-white">{formatWatcherHandle(profile)}</div>
+            <div className="truncate font-black text-white">{displayName}</div>
             <div className="text-xs text-slate-300">{t("profile.role")}</div>
+            {connected ? (
+              <div className="mt-1 truncate text-[11px] font-bold text-blue-200">
+                {t("profile.connectedWallet")}: {formatMockWalletAddress(walletAddress)}
+              </div>
+            ) : null}
             <div className="mt-1 text-xs font-black text-lime-300">
               {formatPoints(weeklyXp)} XP
             </div>
           </div>
         </div>
-      </button>
+        <div className="mt-3 grid gap-2">
+          {connected ? (
+            <>
+              <button
+                type="button"
+                onClick={onEditProfile}
+                className="rounded-xl border border-blue-300/25 bg-blue-400/10 px-3 py-2 text-xs font-black text-blue-100 transition hover:bg-blue-400/16"
+              >
+                {t("profile.edit")}
+              </button>
+              <button
+                type="button"
+                onClick={onDisconnectWallet}
+                className="rounded-xl border border-white/12 bg-black/24 px-3 py-2 text-xs font-black text-slate-300 transition hover:border-rose-300/30 hover:bg-rose-400/10 hover:text-white"
+              >
+                {t("profile.disconnect")}
+              </button>
+            </>
+          ) : (
+            <button
+              type="button"
+              onClick={onConnectWallet}
+              className="rounded-xl border border-lime-300/35 bg-lime-300/14 px-3 py-2 text-xs font-black text-lime-100 transition hover:bg-lime-300/20"
+            >
+              {t("profile.connect")}
+            </button>
+          )}
+        </div>
+      </div>
     </aside>
   );
 }
 
 function ProfileSetupModal({
   profile,
+  walletAddress,
   onClose,
   onSave,
 }: {
   profile: WatcherProfile | null;
+  walletAddress: string;
   onClose: () => void;
   onSave: (profile: WatcherProfile) => void;
 }) {
@@ -982,6 +1087,9 @@ function ProfileSetupModal({
             <p className="mt-2 text-sm font-semibold text-slate-300">
               {t("profile.setupSubtitle")}
             </p>
+            <div className="mt-3 inline-flex rounded-xl border border-blue-300/20 bg-blue-400/10 px-3 py-2 text-xs font-black text-blue-100">
+              {t("profile.connectedWallet")}: {formatMockWalletAddress(walletAddress)}
+            </div>
           </div>
           <button
             type="button"
@@ -1238,19 +1346,41 @@ function SquadBuilderExperience({
 
 function GameLobbyScreen() {
   const [squadSlots, setSquadSlots] = useState<SquadSlot[]>(() =>
-    getSquadSlots(defaultSquadSlotSymbols),
+    getStoredSquadSlots(),
+  );
+  const [connectedWallet, setConnectedWallet] = useState<string | null>(() =>
+    loadStoredWalletSession(),
   );
   const [watcherProfile, setWatcherProfile] = useState<WatcherProfile | null>(() =>
-    loadStoredWatcherProfile(),
+    loadStoredWatcherProfile(loadStoredWalletSession()),
   );
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
   const totals = useMemo(() => getSquadTotals(squadSlots), [squadSlots]);
 
   useEffect(() => {
-    if (watcherProfile) {
-      window.localStorage.setItem(profileStorageKey, JSON.stringify(watcherProfile));
+    window.localStorage.setItem(
+      squadStorageKey,
+      JSON.stringify(squadSlots.map((slot) => slot?.token.symbol ?? null)),
+    );
+  }, [squadSlots]);
+
+  useEffect(() => {
+    if (connectedWallet) {
+      window.localStorage.setItem(walletSessionStorageKey, connectedWallet);
+      return;
     }
-  }, [watcherProfile]);
+
+    window.localStorage.removeItem(walletSessionStorageKey);
+  }, [connectedWallet]);
+
+  useEffect(() => {
+    if (connectedWallet && watcherProfile) {
+      window.localStorage.setItem(
+        getProfileStorageKey(connectedWallet),
+        JSON.stringify(watcherProfile),
+      );
+    }
+  }, [connectedWallet, watcherProfile]);
 
   function handleSelectToken(slotIndex: number, token: Token) {
     setSquadSlots((currentSlots) => {
@@ -1281,11 +1411,22 @@ function GameLobbyScreen() {
       <WeeklyScorePanel
         totals={totals}
         profile={watcherProfile}
-        onOpenProfile={() => setIsProfileModalOpen(true)}
+        walletAddress={connectedWallet}
+        onConnectWallet={() => {
+          setConnectedWallet(mockWalletAddress);
+          setWatcherProfile(loadStoredWatcherProfile(mockWalletAddress));
+        }}
+        onDisconnectWallet={() => {
+          setConnectedWallet(null);
+          setWatcherProfile(null);
+          setIsProfileModalOpen(false);
+        }}
+        onEditProfile={() => setIsProfileModalOpen(true)}
       />
-      {isProfileModalOpen ? (
+      {isProfileModalOpen && connectedWallet ? (
         <ProfileSetupModal
           profile={watcherProfile}
+          walletAddress={connectedWallet}
           onClose={() => setIsProfileModalOpen(false)}
           onSave={(nextProfile) => {
             setWatcherProfile(nextProfile);
