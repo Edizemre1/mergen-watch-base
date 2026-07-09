@@ -38,6 +38,8 @@ wallet transactions, badge minting, or onchain writes.
 
 The current UI is simplified around a squad-builder-first experience: pick Base
 tokens, build a five-slot squad, earn weekly XP, and climb the leaderboard.
+The layout has been corrected so the first screen is a full game lobby with
+season, squad, score, leaderboard, and mini profile panels visible immediately.
 
 The UI supports English and Turkish through a small internal dictionary and a
 visible EN / TR toggle. English is the default language because the public demo

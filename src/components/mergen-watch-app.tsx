@@ -47,6 +47,14 @@ const tokenTones: Record<string, ArtTone> = {
   KEYCAT: "blue",
 };
 
+const leaderboard = [
+  { handle: "@defi_king", avatar: "DK", points: 15240 },
+  { handle: "@token_sorcerer", avatar: "TS", points: 9870 },
+  { handle: "@based_bruh", avatar: "BB", points: 7230 },
+  { handle: "@longbase", avatar: "LB", points: 6420 },
+  { handle: "@nft_baseset", avatar: "NB", points: 5890 },
+];
+
 const avatarOptions = ["BH", "WK", "KG", "SH", "RG", "MS", "CT", "AV"];
 
 const badgeKeys = [
@@ -120,6 +128,18 @@ function getSquadBuilderEntries(): Array<{ token: Token; entry?: WatchlistEntry 
 
     return [{ token, entry }];
   });
+}
+
+function getSquadTotals() {
+  const squad = getSquadBuilderEntries();
+
+  return {
+    weeklyXp: squad.reduce((sum, item, index) => sum + getTokenXp(item.token, index), 0),
+    weeklyPoints: squad.reduce(
+      (sum, item) => sum + getTokenPoints(item.token, item.entry),
+      0,
+    ),
+  };
 }
 
 function gameActionForComment(comment: Comment) {
@@ -279,15 +299,12 @@ function TopNavigation() {
 
   return (
     <header className="sticky top-0 z-40 border-b border-blue-300/12 bg-[#030711]/94 backdrop-blur-xl">
-      <div className="mx-auto flex max-w-[1600px] flex-wrap items-center justify-between gap-4 px-5 py-4">
+      <div className="mx-auto flex max-w-[1760px] flex-wrap items-center justify-between gap-3 px-4 py-3">
         <LeagueLogo />
         <nav className="flex flex-wrap items-center gap-2">
           {[
             ["/", "nav.lobby"],
             ["/watch", "nav.squad"],
-            ["/watch#leaderboard", "nav.leaderboard"],
-            ["/watch#badges", "nav.badges"],
-            ["/#roadmap", "nav.roadmap"],
           ].map(([href, key]) => (
             <Link
               key={href}
@@ -305,9 +322,6 @@ function TopNavigation() {
           >
             {t("nav.github")}
           </a>
-          <div className="hidden rounded-xl border border-lime-300/20 bg-black/35 px-4 py-2 text-sm font-black text-lime-200 md:block">
-            1,250 XP
-          </div>
           <LanguageToggle />
         </nav>
       </div>
@@ -411,7 +425,67 @@ function TokenCharacterCard({
   );
 }
 
-function WideTokenSlot({
+function CharacterPlaceholder({ token, tone }: { token: Token; tone: ArtTone }) {
+  const isAero = token.symbol === "AERO";
+  const isDegen = token.symbol === "DEGEN";
+  const isBrett = token.symbol === "BRETT";
+
+  return (
+    <div className={`relative h-56 overflow-hidden rounded-2xl border border-white/12 bg-gradient-to-br ${toneGradient(tone)} p-4`}>
+      <div className="absolute inset-x-5 bottom-5 h-24 rounded-[2rem] border border-white/12 bg-black/20" />
+      {isAero ? (
+        <>
+          <div className="absolute left-6 top-10 h-10 w-20 -rotate-12 rounded-full border border-blue-100/40 bg-blue-200/25" />
+          <div className="absolute right-6 top-10 h-10 w-20 rotate-12 rounded-full border border-blue-100/40 bg-blue-200/25" />
+          <div className="absolute left-1/2 top-16 grid size-28 -translate-x-1/2 place-items-center rounded-[2rem] border border-white/20 bg-blue-950/55">
+            <div className="size-20 rounded-full border border-blue-100/40 bg-sky-300/35" />
+            <div className="absolute top-10 h-6 w-20 rounded-full border border-white/30 bg-black/45" />
+            <div className="absolute top-12 flex gap-3">
+              <span className="size-4 rounded-full bg-blue-200" />
+              <span className="size-4 rounded-full bg-blue-200" />
+            </div>
+          </div>
+        </>
+      ) : null}
+      {isDegen ? (
+        <>
+          <div
+            className="absolute left-1/2 top-10 h-32 w-32 -translate-x-1/2 border border-violet-200/25 bg-violet-950/65"
+            style={{ clipPath: "polygon(50% 0, 100% 38%, 84% 100%, 16% 100%, 0 38%)" }}
+          />
+          <div className="absolute left-1/2 top-20 grid size-20 -translate-x-1/2 place-items-center rounded-3xl border border-white/15 bg-black/40">
+            <div className="flex gap-4">
+              <span className="h-2 w-5 rounded-full bg-lime-300" />
+              <span className="h-2 w-5 rounded-full bg-lime-300" />
+            </div>
+          </div>
+          <div className="absolute right-8 top-12 size-10 rotate-45 rounded-lg border border-fuchsia-200/40 bg-fuchsia-400/25" />
+        </>
+      ) : null}
+      {isBrett ? (
+        <>
+          <div className="absolute left-1/2 top-12 size-28 -translate-x-1/2 rounded-[2rem] border border-cyan-100/30 bg-cyan-300/35" />
+          <div className="absolute left-1/2 top-7 h-12 w-32 -translate-x-1/2 rounded-t-[3rem] border border-blue-100/30 bg-blue-600/55" />
+          <div className="absolute left-1/2 top-24 flex -translate-x-1/2 gap-6">
+            <span className="size-4 rounded-full bg-white" />
+            <span className="size-4 rounded-full bg-white" />
+          </div>
+          <div className="absolute left-1/2 top-36 h-3 w-14 -translate-x-1/2 rounded-full bg-black/40" />
+        </>
+      ) : null}
+      {!isAero && !isDegen && !isBrett ? (
+        <div className="absolute left-1/2 top-16 grid size-28 -translate-x-1/2 place-items-center rounded-[2rem] border border-white/20 bg-black/35 text-4xl font-black text-white">
+          {token.symbol.slice(0, 2)}
+        </div>
+      ) : null}
+      <div className="absolute bottom-5 left-1/2 -translate-x-1/2 rounded-xl border border-white/15 bg-black/45 px-4 py-1 text-xl font-black text-white">
+        {token.symbol.slice(0, 2)}
+      </div>
+    </div>
+  );
+}
+
+function SquadGameCard({
   token,
   entry,
   index,
@@ -421,7 +495,6 @@ function WideTokenSlot({
   index: number;
 }) {
   const { t } = useLanguage();
-  const level = getTokenLevel(token, index);
   const xp = getTokenXp(token, index);
   const points = getTokenPoints(token, entry);
   const performance = entry ? getEntryReturnPct(entry) : token.change7d;
@@ -431,35 +504,23 @@ function WideTokenSlot({
   return (
     <Link
       href={`/watch/token/${token.address}`}
-      className="group grid overflow-hidden rounded-2xl border border-blue-300/20 bg-slate-950/80 shadow-[0_18px_46px_rgba(0,0,0,0.28)] transition hover:-translate-y-0.5 hover:border-blue-300/55 md:grid-cols-[180px_1fr]"
+      className="group flex min-h-[430px] flex-col rounded-2xl border border-blue-300/20 bg-slate-950/82 p-3 shadow-[0_18px_46px_rgba(0,0,0,0.3)] transition hover:-translate-y-1 hover:border-blue-300/55"
     >
-      <div className={`relative min-h-36 bg-gradient-to-br ${toneGradient(tone)} p-4 md:min-h-44`}>
-        <div className="absolute left-4 top-4 rounded-lg border border-white/15 bg-black/45 px-2 py-1 text-xs font-black text-white">
-          {index + 1} / {maxSquadSlots}
-        </div>
-        <div className="absolute inset-x-6 bottom-5 h-24 rounded-[2rem] border border-white/12 bg-black/25" />
-        <div className="absolute bottom-8 left-1/2 grid size-24 -translate-x-1/2 place-items-center rounded-3xl border border-white/20 bg-black/35 text-4xl font-black text-white shadow-[0_0_28px_rgba(59,130,246,0.25)]">
-          {token.symbol.slice(0, 2)}
-        </div>
-      </div>
-      <div className="grid gap-5 p-5 lg:grid-cols-[1fr_auto] lg:items-center">
+      <CharacterPlaceholder token={token} tone={tone} />
+      <div className="mt-4 flex items-start justify-between gap-3">
         <div>
-          <div className="flex flex-wrap items-center gap-3">
-            <h3 className="text-3xl font-black text-white">{token.symbol}</h3>
-            <StanceBadge stance={stance} />
-          </div>
-          <p className="mt-1 text-sm text-slate-400">{token.name}</p>
-          <div className="mt-4 max-w-xl">
-            <XpBar value={xp} max={1800} />
-            <div className="mt-2 flex items-center justify-between text-xs text-slate-500">
-              <span>{t("metric.level")} {level}</span>
-              <span>{xp.toLocaleString()} / 1,800 XP</span>
-            </div>
-          </div>
+          <div className="text-3xl font-black leading-none text-white">{token.symbol}</div>
+          <div className="mt-1 truncate text-xs text-slate-500">{token.name}</div>
         </div>
-        <div className="grid grid-cols-3 gap-4 rounded-2xl border border-white/10 bg-black/25 p-4 text-left sm:min-w-80">
-          <MiniMetric label={t("metric.performance")} value={formatPercent(performance)} />
-          <MiniMetric label={t("metric.xp")} value={xp.toString()} />
+        <StanceBadge stance={stance} />
+      </div>
+      <div className="mt-4">
+        <XpBar value={xp} max={1800} />
+      </div>
+      <div className="mt-auto grid grid-cols-2 gap-2 pt-4">
+        <MiniMetric label={t("metric.performance")} value={formatPercent(performance)} />
+        <MiniMetric label={t("metric.xp")} value={xp.toString()} />
+        <div className="col-span-2 rounded-xl border border-lime-300/15 bg-lime-300/8 p-3">
           <MiniMetric label={t("metric.points")} value={formatPoints(points)} />
         </div>
       </div>
@@ -467,20 +528,17 @@ function WideTokenSlot({
   );
 }
 
-function WideAddSlot({ index }: { index: number }) {
+function AddGameCard({ index }: { index: number }) {
   const { t } = useLanguage();
 
   return (
-    <div className="grid min-h-36 overflow-hidden rounded-2xl border border-dashed border-lime-300/30 bg-slate-950/54 md:grid-cols-[180px_1fr]">
-      <div className="grid place-items-center bg-lime-300/6 p-5">
-        <div className="grid size-20 place-items-center rounded-full border border-lime-300/35 bg-lime-300/8 text-5xl font-light text-lime-300">
+    <div className="grid min-h-[430px] place-items-center rounded-2xl border border-dashed border-lime-300/35 bg-slate-950/58 p-4 text-center">
+      <div>
+        <div className="mx-auto grid size-24 place-items-center rounded-full border border-lime-300/35 bg-lime-300/8 text-6xl font-light text-lime-300">
           +
         </div>
-      </div>
-      <div className="flex flex-col justify-center p-5">
-        <div className="text-2xl font-black text-lime-300">{t("squad.add")}</div>
-        <p className="mt-2 max-w-lg text-sm leading-6 text-slate-400">{t("squad.addText")}</p>
-        <div className="mt-4 text-xs font-black uppercase tracking-wide text-blue-300">
+        <div className="mt-6 text-2xl font-black text-lime-300">{t("squad.add")}</div>
+        <div className="mt-4 rounded-xl border border-blue-300/15 bg-black/30 px-3 py-2 text-xs font-black uppercase tracking-wide text-blue-200">
           {index + 1} / {maxSquadSlots} {t("squad.slots")}
         </div>
       </div>
@@ -488,36 +546,83 @@ function WideAddSlot({ index }: { index: number }) {
   );
 }
 
-function WeeklyScoreSummary() {
+function WeeklySeasonPanel() {
   const { t } = useLanguage();
-  const squad = getSquadBuilderEntries();
-  const weeklyXp = squad.reduce((sum, item, index) => sum + getTokenXp(item.token, index), 0);
-  const weeklyPoints = squad.reduce(
-    (sum, item) => sum + getTokenPoints(item.token, item.entry),
-    0,
-  );
+  const { weeklyXp, weeklyPoints } = getSquadTotals();
 
   return (
-    <aside className="rounded-2xl border border-blue-300/16 bg-black/30 p-5">
-      <PanelTitle title={t("score.title")} />
-      <p className="mt-3 text-sm leading-6 text-slate-400">{t("score.summary")}</p>
-      <div className="mt-6 rounded-2xl border border-blue-300/14 bg-blue-500/10 p-5">
+    <aside className="flex min-h-full flex-col rounded-2xl border border-blue-300/16 bg-slate-950/76 p-4 shadow-[0_18px_50px_rgba(0,0,0,0.28)]">
+      <PanelTitle title={t("section.weeklySeason")} />
+      <div className="mt-4 rounded-xl border border-white/10 bg-black/28 px-3 py-3">
+        <div className="text-sm font-black text-white">{t("season.name")}</div>
+        <div className="mt-1 text-xs font-bold text-blue-300">{t("season.ends")}</div>
+      </div>
+      <div className="mt-4 rounded-2xl border border-blue-300/14 bg-blue-500/10 p-4">
         <div className="text-xs font-black uppercase tracking-wide text-slate-400">
           {t("season.rank")}
         </div>
         <div className="mt-2 text-5xl font-black text-white">#{playerRank}</div>
-        <div className="mt-2 font-black text-blue-300">{t("season.top")}</div>
+        <div className="mt-1 font-black text-blue-300">{t("season.top")}</div>
       </div>
-      <div className="mt-5 grid gap-4">
-        <div className="rounded-2xl border border-white/10 bg-slate-950/70 p-4">
-          <MiniMetric label={t("metric.xp")} value={formatPoints(weeklyXp)} />
+      <div className="mt-4 grid gap-3">
+        <div className="rounded-xl border border-white/10 bg-black/24 p-3">
+          <MiniMetric label={t("season.weeklyXp")} value={formatPoints(weeklyXp)} />
         </div>
-        <div className="rounded-2xl border border-white/10 bg-slate-950/70 p-4">
+        <div className="rounded-xl border border-white/10 bg-black/24 p-3">
           <MiniMetric label={t("season.weeklyPoints")} value={formatPoints(weeklyPoints)} />
         </div>
       </div>
-      <div className="mt-5">
+      <div className="mt-auto pt-5">
+        <div className="mb-2 flex items-center justify-between text-xs">
+          <span className="font-black uppercase tracking-wide text-slate-500">{t("season.rewards")}</span>
+          <span className="font-black text-lime-300">84%</span>
+        </div>
         <XpBar value={weeklyPoints} max={15000} />
+      </div>
+    </aside>
+  );
+}
+
+function WeeklyScorePanel() {
+  const { t } = useLanguage();
+  const { weeklyXp, weeklyPoints } = getSquadTotals();
+
+  return (
+    <aside className="flex min-h-full flex-col gap-4 rounded-2xl border border-blue-300/16 bg-slate-950/76 p-4 shadow-[0_18px_50px_rgba(0,0,0,0.28)]">
+      <div>
+        <PanelTitle title={t("score.title")} />
+        <div className="mt-4 grid grid-cols-2 gap-3">
+          <div className="rounded-xl border border-white/10 bg-black/24 p-3">
+            <MiniMetric label={t("metric.xp")} value={formatPoints(weeklyXp)} />
+          </div>
+          <div className="rounded-xl border border-white/10 bg-black/24 p-3">
+            <MiniMetric label={t("metric.points")} value={formatPoints(weeklyPoints)} />
+          </div>
+        </div>
+      </div>
+      <div className="rounded-2xl border border-white/10 bg-black/24 p-3">
+        <div className="mb-3 text-xs font-black uppercase tracking-wide text-slate-500">
+          {t("section.leaderboard")}
+        </div>
+        <div className="space-y-2">
+          {leaderboard.map((row, index) => (
+            <div key={row.handle} className="flex items-center gap-2 rounded-xl border border-white/8 bg-slate-950/60 p-2">
+              <div className="w-5 text-center text-xs font-black text-amber-200">{index + 1}</div>
+              <PixelAvatar label={row.avatar} tone={index % 2 === 0 ? "blue" : "violet"} size="sm" />
+              <div className="min-w-0 flex-1 truncate text-xs font-black text-white">{row.handle}</div>
+              <div className="text-xs font-black text-lime-300">{formatPoints(row.points)}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+      <div className="mt-auto rounded-2xl border border-lime-300/18 bg-lime-300/8 p-3">
+        <div className="flex items-center gap-3">
+          <PixelAvatar label="BH" tone="green" selected />
+          <div className="min-w-0">
+            <div className="font-black text-white">{t("profile.handle")}</div>
+            <div className="text-xs text-slate-400">{t("profile.role")}</div>
+          </div>
+        </div>
       </div>
     </aside>
   );
@@ -528,29 +633,41 @@ function SquadBuilderExperience() {
   const squad = getSquadBuilderEntries();
 
   return (
-    <section className="rounded-3xl border border-blue-300/16 bg-slate-950/66 p-4 shadow-[0_26px_80px_rgba(0,0,0,0.32)] md:p-6">
+    <section className="flex min-h-full flex-col rounded-2xl border border-blue-300/16 bg-slate-950/76 p-4 shadow-[0_18px_50px_rgba(0,0,0,0.28)]">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <PanelTitle title={t("squad.builderTitle")} />
-          <p className="mt-3 max-w-2xl text-base leading-7 text-slate-400">
-            {t("squad.builderText")}
+          <div className="inline-flex rounded-lg border border-lime-300/20 bg-lime-300/8 px-3 py-1 text-xs font-black text-lime-200">
+            {t("demo.notice")}
+          </div>
+          <h1 className="mt-3 text-3xl font-black leading-none text-white md:text-4xl">
+            {t("section.yourSquad")}
+          </h1>
+          <p className="mt-2 max-w-xl text-sm leading-6 text-slate-400">
+            {t("hero.subtitle")}
           </p>
         </div>
         <div className="rounded-2xl border border-lime-300/20 bg-lime-300/8 px-4 py-3 text-sm font-black text-lime-200">
           {squad.length} / {maxSquadSlots} {t("squad.slots").toUpperCase()}
         </div>
       </div>
-      <div className="mt-6 grid gap-5 xl:grid-cols-[1fr_300px]">
-        <div className="grid gap-4">
-          {squad.map(({ token, entry }, index) => (
-            <WideTokenSlot key={token.address} token={token} entry={entry} index={index} />
-          ))}
-          <WideAddSlot index={3} />
-          <WideAddSlot index={4} />
-        </div>
-        <WeeklyScoreSummary />
+      <div className="mt-5 grid flex-1 gap-3 sm:grid-cols-2 xl:grid-cols-5">
+        {squad.map(({ token, entry }, index) => (
+          <SquadGameCard key={token.address} token={token} entry={entry} index={index} />
+        ))}
+        <AddGameCard index={3} />
+        <AddGameCard index={4} />
       </div>
     </section>
+  );
+}
+
+function GameLobbyScreen() {
+  return (
+    <div className="grid gap-4 lg:min-h-[calc(100vh-96px)] xl:grid-cols-[250px_minmax(0,1fr)_290px]">
+      <WeeklySeasonPanel />
+      <SquadBuilderExperience />
+      <WeeklyScorePanel />
+    </div>
   );
 }
 
@@ -644,125 +761,20 @@ function BadgesPanel() {
   );
 }
 
-function HowItWorksPanel() {
-  const { t } = useLanguage();
-  const steps: CopyKey[] = ["how.step1", "how.step2", "how.step3", "how.step4"];
-
-  return (
-    <GamePanel id="roadmap" className="p-5">
-      <PanelTitle title={t("section.how")} />
-      <div className="mt-5 grid gap-3 md:grid-cols-4">
-        {steps.map((step, index) => (
-          <div key={step} className="rounded-xl border border-white/8 bg-black/24 p-4">
-            <div className="grid size-9 place-items-center rounded-xl border border-blue-400/25 bg-blue-500/12 text-sm font-black text-blue-200">
-              {index + 1}
-            </div>
-            <div className="mt-4 text-sm font-black text-white">{t(step)}</div>
-          </div>
-        ))}
-      </div>
-      <p className="mt-5 text-sm leading-6 text-slate-400">{t("roadmap.copy")}</p>
-    </GamePanel>
-  );
-}
-
 export function LandingPageView() {
-  const { t } = useLanguage();
-
   return (
     <div className="min-h-screen bg-[#030711] text-white">
       <TopNavigation />
-      <main className="mx-auto max-w-[1600px] px-5 py-8">
-        <section className="border-b border-blue-300/12 pb-10">
-          <div className="mx-auto max-w-4xl text-center">
-            <div className="inline-flex rounded-xl border border-lime-300/25 bg-lime-300/10 px-4 py-2 text-sm font-black text-lime-200">
-              {t("demo.notice")}
-            </div>
-            <h1 className="mt-7 text-5xl font-black leading-[0.98] tracking-tight text-white md:text-7xl">
-              {t("hero.title")}
-            </h1>
-            <p className="mx-auto mt-6 max-w-2xl text-xl leading-9 text-slate-300">
-              {t("hero.subtitle")}
-            </p>
-            <div className="mt-8 flex flex-wrap justify-center gap-3">
-              <Link
-                href="/watch"
-                className="rounded-xl bg-blue-500 px-5 py-3 text-sm font-black text-white shadow-[0_0_26px_rgba(37,99,235,0.35)] transition hover:bg-blue-400"
-              >
-                {t("hero.primary")}
-              </Link>
-              <Link
-                href="#roadmap"
-                className="rounded-xl border border-white/12 bg-white/5 px-5 py-3 text-sm font-black text-white transition hover:bg-white/10"
-              >
-                {t("hero.secondary")}
-              </Link>
-            </div>
-            <div className="mt-8 inline-flex rounded-xl border border-lime-300/20 bg-black/40 px-4 py-2 font-black uppercase tracking-[0.24em] text-lime-300">
-              {t("hero.command")}
-            </div>
-          </div>
-          <div className="mt-10">
-            <SquadBuilderExperience />
-          </div>
-        </section>
-
-        <section className="mt-8 grid gap-4 md:grid-cols-3">
-          {[
-            ["home.pillar1", "home.pillar1Text"],
-            ["home.pillar2", "home.pillar2Text"],
-            ["home.pillar3", "home.pillar3Text"],
-          ].map(([titleKey, textKey], index) => (
-            <GamePanel key={titleKey} className="p-5">
-              <div className="grid size-11 place-items-center rounded-xl border border-blue-400/25 bg-blue-500/12 text-lg font-black text-blue-200">
-                {index + 1}
-              </div>
-              <h2 className="mt-5 text-xl font-black text-white">{t(titleKey as CopyKey)}</h2>
-              <p className="mt-3 text-sm leading-7 text-slate-400">{t(textKey as CopyKey)}</p>
-            </GamePanel>
-          ))}
-        </section>
-        <div className="mt-8">
-          <HowItWorksPanel />
-        </div>
+      <main className="mx-auto max-w-[1760px] px-4 py-4">
+        <GameLobbyScreen />
       </main>
     </div>
   );
 }
 
 export function WatchDashboardView() {
-  const { t } = useLanguage();
-
   return (
-    <div className="space-y-8">
-      <section>
-        <div className="mb-7 flex flex-wrap items-end justify-between gap-5">
-          <div>
-            <div className="inline-flex rounded-xl border border-lime-300/25 bg-lime-300/10 px-4 py-2 text-sm font-black text-lime-200">
-              {t("demo.notice")}
-            </div>
-            <h1 className="mt-5 text-5xl font-black leading-none text-white md:text-7xl">
-              {t("hero.title")}
-            </h1>
-            <p className="mt-4 max-w-2xl text-lg leading-8 text-slate-300">
-              {t("hero.subtitle")}
-            </p>
-          </div>
-          <div className="rounded-2xl border border-blue-300/20 bg-black/28 px-5 py-4 text-sm font-black uppercase tracking-[0.22em] text-blue-200">
-            {t("hero.command")}
-          </div>
-        </div>
-        <SquadBuilderExperience />
-      </section>
-      <GamePanel className="p-5">
-        <PanelTitle title={t("section.watchlists")} />
-        <div className="mt-5 grid gap-4 lg:grid-cols-2 xl:grid-cols-4">
-          {watchlists.map((watchlist) => (
-            <WatchlistLeagueCard key={watchlist.id} watchlist={watchlist} />
-          ))}
-        </div>
-      </GamePanel>
-    </div>
+    <GameLobbyScreen />
   );
 }
 
